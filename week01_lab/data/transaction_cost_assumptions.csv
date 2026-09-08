@@ -1,0 +1,4 @@
+"asset_id","ticker","half_spread_bps","half_spread_rate","assumption_status","note"
+"global_equity_eur","VWRL.AS",5,5e-04,"Illustrative teaching assumption","Symmetric proportional half-spread applied to absolute trade value."
+"euro_government_bonds","IEGA.AS",10,0.001,"Illustrative teaching assumption","Symmetric proportional half-spread applied to absolute trade value."
+"physical_gold_usd","PHAU.L",15,0.0015,"Illustrative teaching assumption","Applied after converting the USD holding and trade value to EUR."

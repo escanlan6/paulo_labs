@@ -1,0 +1,63 @@
+dataset: week01_from_prices_to_investable_returns
+freeze_created: 2026-09-04
+coverage_start: 2020-01-01
+coverage_end: 2025-12-31
+fund:
+  name: Vanguard FTSE All-World UCITS ETF USD Distributing
+  isin: IE00B3RBWM25
+  base_currency: USD
+  exchange_lines:
+    - ticker: VWRL.AS
+      exchange: Euronext Amsterdam
+      trading_currency: EUR
+    - ticker: VWRD.L
+      exchange: London Stock Exchange
+      trading_currency: USD
+portfolio_assets:
+  - ticker: VWRL.AS
+    asset_class: Global equity
+    trading_currency: EUR
+  - ticker: IEGA.AS
+    asset_class: Euro government bonds
+    trading_currency: EUR
+  - ticker: PHAU.L
+    asset_class: Physical gold
+    trading_currency: USD
+sources:
+  vanguard_product_page: https://www.vanguard.co.uk/professional/product/etf/equity/9505/ftse-all-world-ucits-etf-usd-distributing
+  ishares_bond_product_page: https://www.ishares.com/uk/individual/en/products/251740/ishares-core-govt-bond-ucits-etf
+  wisdomtree_gold_product_page: https://www.wisdomtree.com/nl/products/commodities/wisdomtree-physical-gold
+  yahoo_vwrl_as_chart: https://query1.finance.yahoo.com/v8/finance/chart/VWRL.AS?period1=1577836800&period2=1767225600&interval=1d&events=div%2Csplits&includeAdjustedClose=true
+  yahoo_vwrd_l_chart: https://query1.finance.yahoo.com/v8/finance/chart/VWRD.L?period1=1577836800&period2=1767225600&interval=1d&events=div%2Csplits&includeAdjustedClose=true
+  yahoo_ieaga_as_chart: https://query1.finance.yahoo.com/v8/finance/chart/IEGA.AS?period1=1577836800&period2=1767225600&interval=1d&events=div%2Csplits&includeAdjustedClose=true
+  yahoo_phau_l_chart: https://query1.finance.yahoo.com/v8/finance/chart/PHAU.L?period1=1577836800&period2=1767225600&interval=1d&events=div%2Csplits&includeAdjustedClose=true
+  ecb_eurusd: https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?startPeriod=2020-01-01&endPeriod=2025-12-31&format=csvdata
+  ecb_estr: https://data-api.ecb.europa.eu/service/data/EST/B.EU000A2X2A25.WT?startPeriod=2020-01-01&endPeriod=2025-12-31&format=csvdata
+provenance_notes:
+  - Yahoo chart data provide exchange-traded OHLCV, adjusted close and event records.
+  - The eight 2024-2025 USD distributions are cross-checked against Vanguard's public table.
+  - EUR event amounts are Yahoo vendor conversions used to reconstruct the Amsterdam-line total return.
+  - IEGA.AS supplies euro-area government-bond exposure in EUR.
+  - PHAU.L supplies physical-gold exposure in USD and must be converted to EUR before portfolio aggregation.
+  - ECB EUR/USD is USD per EUR at the reference fixing; euro short-term rate is percent per annum.
+  - Removed non-price Yahoo rows: VWRL.AS=1; VWRD.L=1; IEGA.AS=1; PHAU.L=0.
+transaction_cost_assumptions:
+  status: Illustrative teaching assumptions, not historical spread estimates.
+  model: Symmetric proportional half-spread applied to absolute EUR trade value.
+  half_spread_bps:
+    VWRL.AS: 5
+    IEGA.AS: 10
+    PHAU.L: 15
+validation:
+  vwrl_as_rows: 1537
+  vwrd_l_rows: 1514
+  iega_as_rows: 1537
+  phau_l_rows: 1515
+  asset_distribution_rows: 60
+  distribution_rows: 24
+  official_distribution_rows_verified: 8
+  manual_vs_adjusted_median_abs_return_error: 8.100961e-08
+  manual_vs_adjusted_max_abs_return_error: 2.57621e-04
+license_and_use:
+  - Provided for teaching and reproducible analysis; retain source attribution.
+  - Public market data can be revised by providers; rerunning this script creates a new freeze.

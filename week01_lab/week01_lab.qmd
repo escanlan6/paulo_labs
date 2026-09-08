@@ -1,0 +1,478 @@
+---
+title: "Week 1 laboratory"
+subtitle: "From prices to excess returns and diversified portfolios"
+author: "MTH1097 Financial and Actuarial Data Analysis"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    code-fold: false
+    code-tools: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Purpose
+
+This is a formative laboratory. It is not submitted for marks.
+
+By the end of the laboratory, you should be able to turn market prices into returns that are economically meaningful for a euro investor. You will:
+
+1. inspect and validate a frozen financial dataset;
+2. distinguish price returns from total returns;
+3. convert a USD investment into EUR;
+4. discount wealth by a euro safe-rate account;
+5. annualise simple and log excess returns and volatility;
+6. construct a multi-asset portfolio;
+7. measure the effect of diversification;
+8. calculate transaction costs using an exact self-financing budget.
+
+The analysis covers 2 January 2020 to 31 December 2025. The portfolio assets are global equities, euro government bonds and physical gold. The allocation used in the laboratory is illustrative, not investment advice.
+
+## Working with AI
+
+You may use AI freely. You remain responsible for every line of code, every financial assumption and every result.
+
+For each task:
+
+1. state the financial question;
+2. ask AI for one small piece of code;
+3. inspect the code before running it;
+4. predict something about the result;
+5. run the code and test it;
+6. explain the result in financial language.
+
+If you cannot explain a line, ask AI to simplify or explain it before continuing. Do not ask AI to complete the entire laboratory in one prompt.
+
+## Timing
+
+| Minutes | Task |
+|---:|---|
+| 0--5 | Open the project and run the setup chunk |
+| 5--17 | Audit the data |
+| 17--32 | Construct total returns |
+| 32--45 | Convert USD values into EUR |
+| 45--60 | Construct and apply the safe-rate account |
+| 60--75 | Annualise excess returns and volatility |
+| 75--93 | Construct a portfolio |
+| 93--105 | Measure diversification |
+| 105--120 | Rebalance with exact transaction costs |
+
+## Setup
+
+Open this folder in your coding environment, then run the following chunk.
+
+```{r}
+library(tidyverse)
+library(scales)
+
+theme_set(theme_minimal(base_size = 12))
+options(dplyr.summarise.inform = FALSE)
+
+data_candidates <- c("data", "../data/frozen")
+data_dir <- data_candidates[dir.exists(data_candidates)][1]
+stopifnot(length(data_dir) == 1, !is.na(data_dir))
+```
+
+::: {.callout-note}
+The supplied files are frozen. Do not download replacement observations during the laboratory. Everyone should analyse the same data.
+:::
+
+# Part I: From prices to common-currency returns
+
+## Task 1 — Audit the data
+
+Read these files:
+
+- `asset_prices_daily.csv`
+- `asset_metadata.csv`
+- `vwrl_distributions.csv`
+- `ecb_eurusd_daily.csv`
+- `ecb_estr_daily.csv`
+- `transaction_cost_assumptions.csv`
+
+Use R to answer:
+
+1. What does one row of `asset_prices_daily.csv` represent?
+2. Which tickers, exchanges and currencies are present?
+3. What is the date range and number of observations for each ticker?
+4. Are any ticker-date combinations duplicated?
+5. Are `close` or `adj_close` values missing?
+6. Which two tickers represent different exchange listings of the same fund?
+7. Why do those two listings not provide diversification?
+
+```{r}
+# Read the six CSV files here.
+
+```
+
+```{r}
+# Build a compact audit table and perform explicit duplicate and missing-value checks.
+
+```
+
+::: {.callout-tip title="A possible first AI prompt"}
+Write beginner-friendly tidyverse R code that reads the six named CSV files from `data_dir`. Then summarise the number of rows, first and last dates, currencies, and missing close and adjusted-close values by ticker. Check ticker-date duplicates separately. Explain every function.
+:::
+
+**Code check.** Why must `group_by(ticker)` and `arrange(date, .by_group = TRUE)` appear before applying `lag()` to several assets?
+
+**Your answer:**
+
+
+## Task 2 — Reconstruct VWRL total returns
+
+Use the Amsterdam listing `VWRL.AS`. Its closing price and cash distribution are both expressed in EUR in the supplied files.
+
+Calculate:
+
+$$
+G_t^P=\frac{P_t}{P_{t-1}}, \qquad
+R_t^P=G_t^P-1,
+$$
+
+$$
+G_t^{TR}=\frac{P_t+D_t}{P_{t-1}}, \qquad
+R_t^{TR}=G_t^{TR}-1,
+$$
+
+and the adjusted-close return
+
+$$
+R_t^A=\frac{A_t}{A_{t-1}}-1.
+$$
+
+Steps:
+
+1. Filter `asset_prices_daily.csv` to `VWRL.AS` and arrange it by date.
+2. Join `vwrl_distributions.csv` using `event_date_vendor` as the date.
+3. Replace an absent distribution with zero.
+4. Calculate price, manually reconstructed total and adjusted-close returns.
+5. Inspect at least one distribution date.
+6. Verify one return manually with a calculator.
+7. Report the median and maximum absolute difference between the reconstructed and adjusted-close returns.
+
+```{r}
+# Construct and compare the three VWRL return series.
+
+```
+
+::: {.callout-warning}
+`adj_close` is a constructed series, not a price at which the investor could trade. The manual reconstruction is the economic check that justifies using it subsequently.
+:::
+
+**Code checks.** Explain:
+
+- why a left join from prices to distributions is appropriate;
+- why missing distributions become zero rather than deleting the row;
+- why `amount_usd` cannot be added directly to the EUR price of `VWRL.AS`;
+- why the first return is missing.
+
+## Task 3 — Change the investor's currency
+
+Let (X_t) be USD per EUR, as reported in `ecb_eurusd_daily.csv`. The EUR value of a USD price is
+
+$$
+P_t^{EUR}=\frac{P_t^{USD}}{X_t}.
+$$
+
+The gross EUR return satisfies
+
+$$
+G_t^{EUR}=G_t^{USD}\frac{X_{t-1}}{X_t}.
+$$
+
+Therefore simple currency and asset returns multiply rather than add:
+
+$$
+1+R_t^{EUR}=(1+R_t^{USD})(1+R_t^{FX}).
+$$
+
+Log returns add exactly:
+
+$$
+r_t^{EUR}=r_t^{USD}+r_t^{FX}.
+$$
+
+Perform two conversions:
+
+1. Convert the adjusted-close level of `VWRD.L` from USD into EUR. Compare its returns with `VWRL.AS` on common dates.
+2. Convert `PHAU.L` from USD into EUR. This EUR gold series will enter the portfolio.
+
+```{r}
+# Convert the two USD listings to EUR and validate the VWRD conversion.
+
+```
+
+**Before running the code:** if the euro depreciates against the dollar while the USD asset price is unchanged, should its EUR value rise or fall?
+
+**Your prediction and explanation:**
+
+
+**Validation.** Show numerically that the direct level conversion and the gross-return multiplication give the same EUR return, up to rounding.
+
+# Part II: Excess returns
+
+## Task 4 — Construct the euro safe account
+
+The `estr_percent` observation is an annual percentage rate. Use the rate recorded on the preceding observation to accrue the safe account over the interval to the current date.
+
+If the interval spans $\Delta d_t$ calendar days, calculate
+
+$$
+G_{f,t}=1+\frac{y_{t-1}}{100}\frac{\Delta d_t}{360}.
+$$
+
+Then construct
+
+$$
+B_t=B_{t-1}G_{f,t}, \qquad B_0=1.
+$$
+
+The actual/360 convention and the calendar-day count ensure that weekend and holiday accrual is not silently treated as one day.
+
+```{r}
+# Construct the safe gross-return series and safe-account index.
+
+```
+
+Check several Friday-to-Monday observations. Confirm that their day count is normally three rather than one.
+
+Next, combine the following EUR levels on dates available for every series:
+
+- `VWRL.AS` adjusted close: `global_equity_eur`;
+- `IEGA.AS` adjusted close: `euro_government_bonds`;
+- converted `PHAU.L` level: `physical_gold_eur`;
+- the €STR safe-account index.
+
+Calculate exact discounted returns:
+
+$$
+G_{i,t}^e=\frac{G_{i,t}}{G_{f,t}},
+$$
+
+$$
+R_{i,t}^e=G_{i,t}^e-1,
+\qquad
+r_{i,t}^e=\log G_{i,t}^e.
+$$
+
+```{r}
+# Make the common-date panel and calculate nominal and excess returns.
+
+```
+
+**Validation.** For every asset, verify
+
+$$
+\prod_tG_{i,t}^e
+=
+\frac{W_{i,T}/W_{i,0}}{B_T/B_0}.
+$$
+
+Explain why $R_{i,t}-R_{f,t}$ is only a high-frequency approximation to the exact simple excess return.
+
+## Task 5 — Annualise excess returns and volatility
+
+Let $T$ be the sample length in years, $n$ the number of return intervals and $m=n/T$ the observed number of intervals per year.
+
+Calculate for each asset:
+
+$$
+\overline R_{\mathrm{ann}}^e=m\,\overline R^e,
+$$
+
+$$
+\overline r_{\mathrm{ann}}^e=m\,\overline r^e
+=\frac{1}{T}\sum_t r_t^e,
+$$
+
+$$
+\sigma_{R,\mathrm{ann}}=\sqrt m\,\operatorname{sd}(R_t^e),
+\qquad
+\sigma_{r,\mathrm{ann}}=\sqrt m\,\operatorname{sd}(r_t^e).
+$$
+
+```{r}
+# Produce one row per asset with annualised simple and log excess means,
+# annualised simple and log volatility, and final discounted wealth.
+
+```
+
+Your table should have clear percentage labels and must state whether each quantity uses simple or log returns.
+
+**Interpretation questions.**
+
+1. Why is the annualised arithmetic mean not the realised compounded performance?
+2. Why are daily simple-return and log-return volatilities close but not identical?
+3. Why is volatility multiplied by $\sqrt m$, not by $m$?
+4. What modelling assumptions might make annualisation misleading? We return to this in Week 2.
+
+# Part III: Portfolios and diversification
+
+## Task 6 — Construct a multi-asset portfolio
+
+Use the following target weights:
+
+| Asset | Weight |
+|---|---:|
+| Global equities | 60% |
+| Euro government bonds | 30% |
+| Physical gold | 10% |
+
+For beginning-of-period weights $w_{i,t-1}$, the exact simple portfolio return is
+
+$$
+R_{p,t}=\sum_i w_{i,t-1}R_{i,t}.
+$$
+
+For this first calculation, assume the portfolio is restored to its target weights every day and that trading is frictionless. This is a **daily-rebalanced benchmark**, not a buy-and-hold strategy.
+
+```{r}
+# Construct the daily-rebalanced portfolio and its nominal and excess returns.
+
+```
+
+Calculate the same annualised statistics as in Task 5 and append the portfolio to the comparison table.
+
+**Code checks.** Explain:
+
+- why every component must use the same dates and investor currency;
+- why `rowMeans()` would impose equal weights;
+- why fixed weights imply rebalancing;
+- why a weighted average of component log returns is not the portfolio log return.
+
+## Task 7 — Demonstrate diversification
+
+Calculate:
+
+1. the correlation matrix of the three asset returns;
+2. the daily covariance matrix $\Sigma$;
+3. portfolio volatility directly from its return series;
+4. portfolio volatility from
+
+$$
+\sigma_p=\sqrt{\mathbf w^\top\Sigma\mathbf w};
+$$
+
+5. the weighted average of standalone volatilities,
+
+$$
+\sum_i w_i\sigma_i.
+$$
+
+```{r}
+# Calculate and reconcile the two portfolio-volatility estimates.
+
+```
+
+```{r}
+# Create one informative diversification chart.
+
+```
+
+**Interpretation.** Explain why
+
+$$
+\sqrt{\mathbf w^\top\Sigma\mathbf w}
+<
+\sum_i w_i\sigma_i
+$$
+
+when correlations are below one. Does diversification necessarily raise average return or eliminate all risk?
+
+## Task 8 — Rebalance with exact transaction costs
+
+Suppose €100,000 is allocated to the 60/30/10 target weights immediately before the first common return observation in January 2025. Allow each holding to grow until the final common observation in January without rebalancing. These are the pre-trade asset values $v_i^-$.
+
+Read the approved illustrative half-spreads from `transaction_cost_assumptions.csv`. They are assumptions for teaching, not historical spread estimates.
+
+Let
+
+$$
+V^-=\sum_i v_i^-
+$$
+
+be pre-trade wealth. Solve for post-trade wealth $V^+$:
+
+$$
+V^-
+=
+V^+
++
+\sum_i s_i\left|w_iV^+-v_i^-\right|.
+$$
+
+Then calculate:
+
+$$
+\Delta_i=w_iV^+-v_i^-,
+\qquad
+C_i=s_i|\Delta_i|,
+\qquad
+v_i^+=w_iV^+.
+$$
+
+```{r}
+# Derive the January pre-trade holdings, define the budget residual,
+# solve for post-trade wealth with uniroot(), and build a reconciliation table.
+
+```
+
+Your table must report, for every asset:
+
+- pre-trade value;
+- signed trade;
+- half-spread;
+- transaction cost;
+- post-trade value;
+- post-trade weight.
+
+Verify:
+
+$$
+\sum_i v_i^-=V^-,
+$$
+
+$$
+V^-=\sum_i v_i^+ + \sum_i C_i,
+$$
+
+$$
+\frac{v_i^+}{V^+}=w_i.
+$$
+
+::: {.callout-important}
+Do not calculate costs from trades based on $w_iV^-$ and call the result exact. Costs reduce the wealth that can be allocated after trading, so the target values depend on the unknown $V^+$.
+:::
+
+## Final explanation
+
+Write four to six sentences answering:
+
+1. What changed when distributions were included?
+2. What changed when the USD gold investment was measured in EUR?
+3. Which asset had the highest annualised excess volatility?
+4. How much did diversification reduce portfolio volatility relative to the weighted average of standalone volatilities?
+5. How much wealth was lost to the exact January rebalance costs?
+6. Which assumptions limit the interpretation?
+
+AI may help edit your prose, but every numerical statement must come from code that you have checked.
+
+## Completion checklist
+
+- [ ] Every return series is ordered and grouped correctly.
+- [ ] Every portfolio component is measured in EUR.
+- [ ] Total returns include distributions.
+- [ ] Simple excess returns use gross-return division.
+- [ ] Log excess returns use a difference of logs.
+- [ ] Return and volatility annualisation are labelled correctly.
+- [ ] Portfolio weights sum to one.
+- [ ] The covariance formula agrees with direct portfolio volatility.
+- [ ] The transaction-cost budget reconciles to within a small numerical tolerance.
+- [ ] You can explain every R function used.
