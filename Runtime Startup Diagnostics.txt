@@ -1,0 +1,421 @@
+# Positron Runtime Startup Diagnostics
+
+
+## System Information
+
+* Positron: 2026.09.1 build 2 (Code OSS 1.130.0)
+* Commit: 467ff390dd8b4ffc8972ebb84d9e05a1fd5a4fe2
+* OS: win32(10.0.26200)
+* CPUs: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz(8 x 2803)
+* Memory(System): 31.69 GB (20.76GB free)
+* Initial Startup: false
+
+## Workspace-Affiliated Runtimes
+
+* No affiliated runtimes for this workspace
+
+## Active Sessions
+
+### R 4.6.1
+
+* **Runtime**: R 4.6.1
+* **Mode**: console
+* **State**: exited
+* **Start Reason**: User selected runtime
+* **Created**: 12:12:25 PM
+* **Uptime**: 1 minutes
+* **Executions**: 0
+* **Average latency**: -
+
+### R 4.6.1
+
+* **Runtime**: R 4.6.1
+* **Mode**: console
+* **State**: exited
+* **Start Reason**: User selected runtime
+* **Created**: 12:13:09 PM
+* **Uptime**: 28.724 seconds
+* **Executions**: 0
+* **Average latency**: -
+
+
+## Time to First Runtime Ready
+
+* No runtime has reached ready state yet
+
+## Startup Phase Progression
+
+* Current Phase: Complete
+
+| Phase        | Timestamp (ms) | Duration (ms) |
+| ------------ | -------------- | ------------- |
+| initializing | 1789124830907  | -             |
+| starting     | 1789124831419  | 512           |
+| loadingCache | 1789124836357  | 4938          |
+| discovering  | 1789124836368  | 11            |
+| complete     | 1789124837239  | 871           |
+
+## Positron Runtime Performance Marks
+
+| Name                                                                   | Timestamp     | Delta  | Total  |
+| ---------------------------------------------------------------------- | ------------- | ------ | ------ |
+| code/positron/runtimeStartupBegin                                      | 1789124830907 | 0      | 0      |
+| code/positron/runtimeStartupPhase/initializing                         | 1789124830907 | 0      | 0      |
+| code/positron/runtimeStartupPhase/starting                             | 1789124831419 | 512    | 512    |
+| code/positron/runtimeStartup/extensionPreActivate/ms-python.python     | 1789124831525 | 106    | 618    |
+| code/positron/runtimeStartup/extensionPreActivate/positron.positron-r  | 1789124831525 | 0      | 618    |
+| code/positron/positron.positron-supervisor/initializing                | 1789124833151 | 1626   | 2244   |
+| code/positron/positron.positron-supervisor/ready                       | 1789124833941 | 790    | 3034   |
+| code/positron/runtimeStartup/extensionPostActivate/positron.positron-r | 1789124834011 | 70     | 3104   |
+| code/positron/runtimeStartup/extensionPostActivate/ms-python.python    | 1789124834814 | 803    | 3907   |
+| code/positron/runtimeStartupPhase/loadingCache                         | 1789124836357 | 1543   | 5450   |
+| code/positron/runtimeStartupPhase/discovering                          | 1789124836368 | 11     | 5461   |
+| code/positron/runtimeStartupPhase/complete                             | 1789124837239 | 871    | 6332   |
+| code/positron/runtimeSessionWillStart/r-22d9754e                       | 1789125145177 | 307938 | 314270 |
+| code/positron/runtimeSessionWillStart/r-ecab4e42                       | 1789125189185 | 44008  | 358278 |
+
+## Individual Session Startup Times
+
+* No session start marks recorded
+
+## Interpreter Settings
+
+### Startup Behavior
+
+* `interpreters.startupBehavior`: auto
+* `interpreters.restartOnCrash`: true
+
+### Python
+
+* `python.defaultInterpreterPath`: python
+* `python.interpreters.include`: []
+* `python.interpreters.exclude`: []
+* `python.interpreters.override`: []
+* `python.environmentProviders.enable`: {"Venv":true,"Conda":true,"uv":true}
+* `python.locator`: native
+
+### R
+
+* `positron.r.interpreters.default`: (not set)
+* `positron.r.customBinaries`: []
+* `positron.r.customRootFolders`: []
+* `positron.r.interpreters.exclude`: []
+* `positron.r.interpreters.override`: []
+* `positron.r.interpreters.condaDiscovery`: false
+* `positron.r.interpreters.pixiDiscovery`: false
+
+
+## Session Launch Parameters
+
+### R 4.6.1
+
+* **argv**: `c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\ark\windows-x64\ark.exe --connection_file {connection_file} --log {log_file} --startup-file c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\scripts\startup.R --session-mode console -- --interactive --no-restore-data --no-save`
+* **Protocol version**: 5.5
+* **Environment variables** (3):
+
+| Variable       | Value                      |
+| -------------- | -------------------------- |
+| RUST_BACKTRACE | 1                          |
+| RUST_LOG       | warn,ark=warn              |
+| R_HOME         | C:\Program Files\R\R-4.6.1 |
+
+### R 4.6.1
+
+* **argv**: `c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\ark\windows-x64\ark.exe --connection_file {connection_file} --log {log_file} --startup-file c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\scripts\startup.R --session-mode console -- --interactive --no-restore-data --no-save`
+* **Protocol version**: 5.5
+* **Environment variables** (3):
+
+| Variable       | Value                      |
+| -------------- | -------------------------- |
+| RUST_BACKTRACE | 1                          |
+| RUST_LOG       | warn,ark=warn              |
+| R_HOME         | C:\Program Files\R\R-4.6.1 |
+
+
+## Discovered Runtimes
+
+| Extension           | Name    | Path                                     |
+| ------------------- | ------- | ---------------------------------------- |
+| positron.positron-r | R 4.6.1 | C:\Program Files\R\R-4.6.1\bin\x64\R.exe |
+
+## Discovery Cache
+
+
+### This-session counters
+
+* Foreground cache-hit registrations: 1
+* Background revalidations attempted / succeeded / failed: 0 / 0 / 0
+* Evictions this session: 0
+* Full-discovery passes this session: 2
+* Full-discovery passes triggered by root changes: 0
+| Extension                    | Language | Reason     | At                       |
+| ---------------------------- | -------- | ---------- | ------------------------ |
+| ms-python.python             | python   | cold-start | 2026-09-11T11:07:16.427Z |
+| positron.positron-reticulate | python   | cold-start | 2026-09-11T11:07:16.427Z |
+
+### Per-bucket state
+
+| Extension                    | Language | Entries | Oldest firstSeen | Newest lastValidated | lastFullDiscovery |
+| ---------------------------- | -------- | ------- | ---------------- | -------------------- | ----------------- |
+| positron.positron-r          | r        | 1       | 11m ago          | 6m ago               | 11m ago           |
+| ms-python.python             | python   | 0       | -                | -                    | 6m ago            |
+| positron.positron-reticulate | python   | 0       | -                | -                    | 6m ago            |
+
+### Discovery Root Signatures
+
+
+#### positron.positron-r / r
+
+* Roots: 6 (with opaque blob)
+| Path                                   | Exists | mtime                    |
+| -------------------------------------- | ------ | ------------------------ |
+| C:\Program Files\R                     | yes    | 2026-09-10T17:38:16.240Z |
+| C:\Users\User\AppData\Local\Programs\R | no     | -                        |
+| /usr/bin/R                             | no     | -                        |
+| /usr/local/bin/R                       | no     | -                        |
+| /opt/local/bin/R                       | no     | -                        |
+| /opt/homebrew/bin/R                    | no     | -                        |
+
+#### ms-python.python / python
+
+* Roots: 19 (with opaque blob)
+| Path                                              | Exists | mtime                    |
+| ------------------------------------------------- | ------ | ------------------------ |
+| C:\Users\User\.pyenv\pyenv-win\versions           | no     | -                        |
+| /usr/bin                                          | no     | -                        |
+| /usr/local/bin                                    | no     | -                        |
+| /opt/homebrew/bin                                 | no     | -                        |
+| /opt/local/bin                                    | no     | -                        |
+| /opt/python                                       | no     | -                        |
+| C:\Users\User\.pyenv\versions                     | no     | -                        |
+| C:\Users\User\anaconda3\envs                      | no     | -                        |
+| C:\Users\User\miniconda3\envs                     | no     | -                        |
+| C:\Users\User\anaconda\envs                       | no     | -                        |
+| C:\Users\User\miniconda\envs                      | no     | -                        |
+| C:\Users\User\.conda\envs                         | no     | -                        |
+| C:\Users\User\AppData\Roaming\uv\python           | no     | -                        |
+| C:\Users\User\AppData\Local\hatch\env\virtual     | no     | -                        |
+| C:\Users\User\AppData\Local\Programs\Python       | no     | -                        |
+| C:\Users\User\AppData\Local\Microsoft\WindowsApps | yes    | 2026-09-10T17:21:41.631Z |
+| C:\Program Files\Python                           | no     | -                        |
+| C:\Users\User\AppData\Local\Programs\Positron     | yes    | 2026-09-10T18:04:16.008Z |
+| C:\Users\User\.virtualenvs                        | no     | -                        |
+
+## Extension Host Status
+
+* Registered extensions: 140
+
+| Extension Host | State      |
+| -------------- | ---------- |
+| Local Process  | Responsive |
+
+## Output Channels
+
+### Kernel Supervisor
+
+* Showing last 50 of 238 lines
+
+```
+11:10:54 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:11:14 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:11:34 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:11:54 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:12:14 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:12:25 [Positron] Creating session: {"sessionId":"r-22d9754e","sessionMode":"console","createdTimestamp":1789125145171,"startReason":"User selected runtime","userSelected":true}
+11:12:25 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:12:25 [INFO] new_session("r-22d9754e") - X-Span-ID: "e6c06cb5-b51e-468f-bcaf-37b5c53ccd33"
+11:12:25 [DEBUG] (4) kcserver::server: Created log file for session r-22d9754e at "C:\\Users\\User\\AppData\\Local\\Temp\\kernel_log_r-22d9754e.txt"
+11:12:25 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:12:25 [INFO] start_session("r-22d9754e") - X-Span-ID: "ba4320b9-8446-49c2-8792-20efc36db4d3"
+11:12:25 [DEBUG] (4) kcserver::kernel_state: [session r-22d9754e] status 'idle' => 'starting' (start API called)
+11:12:25 [INFO] [session r-22d9754e] Kernel supports JEP 66 (protocol version 5.5) - creating registration socket for handshake
+11:12:25 [DEBUG] (4) kcserver::kernel_session::handshake: Started registration socket for session r-22d9754e with port 52709
+11:12:25 [DEBUG] (4) kcserver::kernel_session::handshake: Wrote registration file for session r-22d9754e at "C:\\Users\\User\\AppData\\Local\\Temp\\registration_r-22d9754e.json" with port 52709
+11:12:25 [DEBUG] (4) kcserver::kernel_session: Starting kernel for session r-22d9754e: ["c:\\Users\\User\\AppData\\Local\\Programs\\Positron\\resources\\app\\extensions\\positron-r\\resources\\ark\\windows-x64\\ark.exe", "--connection_file", "C:\\Users\\User\\AppData\\Local\\Temp\\registration_r-22d9754e.json", "--log", "C:\\Users\\User\\AppData\\Local\\Temp\\kernel-v3D96o\\kernel.log", "--startup-file", "c:\\Users\\User\\AppData\\Local\\Programs\\Positron\\resources\\app\\extensions\\positron-r\\resources\\scripts\\startup.R", "--session-mode", "console", "--", "--interactive", "--no-restore-data", "--no-save"]
+11:12:25 [INFO] [session r-22d9754e] Waiting for JEP 66 handshake
+11:12:25 [DEBUG] (8) kcserver::kernel_session::process: End of output stream (kind: Stdout)
+11:12:25 [DEBUG] (4) kcserver::kernel_session::process: End of output stream (kind: Stderr)
+11:12:25 [INFO] Child process for session r-22d9754e exited with status: exit code: 0xc0000135
+11:12:25 [DEBUG] (4) kcserver::kernel_state: [session r-22d9754e] status 'starting' => 'exited' (child process exited)
+11:12:25 [ERROR] [session r-22d9754e] Kernel exited during handshake with code -1073741515: The process exited abnormally (exit code: 0xc0000135)
+11:12:25 [ERROR] [session r-22d9754e] Output before exit: 
+
+11:12:25 [ERROR] [session r-22d9754e] JEP 66 handshake failed: StartupError { exit_code: Some(-1073741515), output: Some(""), error: Error { code: "KS-14", message: "The kernel exited before a connection could be established", details: Some("The kernel exited before a connection could be established") } }
+11:12:34 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:12:54 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:13:09 [Positron] Creating session: {"sessionId":"r-ecab4e42","sessionMode":"console","createdTimestamp":1789125189182,"startReason":"User selected runtime","userSelected":true}
+11:13:09 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:13:09 [INFO] new_session("r-ecab4e42") - X-Span-ID: "742727e3-7747-4760-ae39-22e0fe241d8e"
+11:13:09 [DEBUG] (4) kcserver::server: Created log file for session r-ecab4e42 at "C:\\Users\\User\\AppData\\Local\\Temp\\kernel_log_r-ecab4e42.txt"
+11:13:09 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:13:09 [INFO] start_session("r-ecab4e42") - X-Span-ID: "5e9ce51b-b533-44e6-9469-fb1d5fe100e6"
+11:13:09 [DEBUG] (4) kcserver::kernel_state: [session r-ecab4e42] status 'idle' => 'starting' (start API called)
+11:13:09 [INFO] [session r-ecab4e42] Kernel supports JEP 66 (protocol version 5.5) - creating registration socket for handshake
+11:13:09 [DEBUG] (4) kcserver::kernel_session::handshake: Started registration socket for session r-ecab4e42 with port 52712
+11:13:09 [DEBUG] (4) kcserver::kernel_session::handshake: Wrote registration file for session r-ecab4e42 at "C:\\Users\\User\\AppData\\Local\\Temp\\registration_r-ecab4e42.json" with port 52712
+11:13:09 [DEBUG] (4) kcserver::kernel_session: Starting kernel for session r-ecab4e42: ["c:\\Users\\User\\AppData\\Local\\Programs\\Positron\\resources\\app\\extensions\\positron-r\\resources\\ark\\windows-x64\\ark.exe", "--connection_file", "C:\\Users\\User\\AppData\\Local\\Temp\\registration_r-ecab4e42.json", "--log", "C:\\Users\\User\\AppData\\Local\\Temp\\kernel-IozvuI\\kernel.log", "--startup-file", "c:\\Users\\User\\AppData\\Local\\Programs\\Positron\\resources\\app\\extensions\\positron-r\\resources\\scripts\\startup.R", "--session-mode", "console", "--", "--interactive", "--no-restore-data", "--no-save"]
+11:13:09 [INFO] [session r-ecab4e42] Waiting for JEP 66 handshake
+11:13:09 [DEBUG] (8) kcserver::kernel_session::process: End of output stream (kind: Stdout)
+11:13:09 [DEBUG] (2) kcserver::kernel_session::process: End of output stream (kind: Stderr)
+11:13:09 [INFO] Child process for session r-ecab4e42 exited with status: exit code: 0xc0000135
+11:13:09 [DEBUG] (2) kcserver::kernel_state: [session r-ecab4e42] status 'starting' => 'exited' (child process exited)
+11:13:09 [ERROR] [session r-ecab4e42] Kernel exited during handshake with code -1073741515: The process exited abnormally (exit code: 0xc0000135)
+11:13:09 [ERROR] [session r-ecab4e42] Output before exit: 
+
+11:13:09 [ERROR] [session r-ecab4e42] JEP 66 handshake failed: StartupError { exit_code: Some(-1073741515), output: Some(""), error: Error { code: "KS-14", message: "The kernel exited before a connection could be established", details: Some("The kernel exited before a connection could be established") } }
+11:13:14 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+11:13:34 [INFO] Client connected to named pipe: \\.\pipe\kallichore-344
+
+```
+
+### Python Language Pack
+
+* Showing last 50 of 129 lines
+
+```
+2026-09-11 12:04:30.089 [info] CreateEnv Trigger - Skipping for c:\Users\User\paulo_labs
+2026-09-11 12:04:30.126 [info] > python -c "import sys;print(sys.executable)"
+2026-09-11 12:04:30.206 [info] pythonRuntimeDiscoverer: recommended for workspace: false
+2026-09-11 12:04:43.835 [info] CondaPythonPickerContribution returning 0 items
+2026-09-11 12:06:38.764 [info] CondaPythonPickerContribution returning 0 items
+2026-09-11 12:07:15.144 [info] Telemetry level is off
+2026-09-11 12:07:15.144 [info] Experiments are disabled, only manually opted experiments are active.
+2026-09-11 12:07:15.144 [info] Native locator: Refresh started
+2026-09-11 12:07:15.144 [info] > uv --color never python dir
+2026-09-11 12:07:15.144 [info] CondaPythonPickerContribution created for language: python
+2026-09-11 12:07:15.144 [info] Native locator: Refresh started
+2026-09-11 12:07:15.144 [info] activatePositron: done!
+2026-09-11 12:07:15.144 [info] Skipping ActivatedEnv Detection:  process.env.VSCODE_CLI !== '1'
+2026-09-11 12:07:15.144 [info] Skipping ActivatedEnv Detection:  process.env.VSCODE_CLI !== '1'
+2026-09-11 12:07:15.144 [info] > pyenv which python
+2026-09-11 12:07:15.144 [info] cwd: .
+2026-09-11 12:07:15.144 [info] > pyenv which python
+2026-09-11 12:07:15.144 [info] cwd: .
+2026-09-11 12:07:15.528 [info] Native locator: Refresh finished in 1537 ms
+2026-09-11 12:07:16.326 [info] No recommended workspace runtime found.
+2026-09-11 12:07:16.449 [info] pythonRuntimeDiscoverer: Starting Python runtime discoverer
+2026-09-11 12:07:16.449 [info] Native locator: Refresh started
+2026-09-11 12:07:16.559 [info] > python -c "import sys;print(sys.executable)"
+2026-09-11 12:07:16.695 [info] Native locator: Refresh finished in 247 ms
+2026-09-11 12:07:17.113 [error] [Error: Command failed: python -c "import sys;print(sys.executable)"
+Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.
+
+	at genericNodeError (node:internal/errors:985:15)
+	at wrappedFn (node:internal/errors:539:14)
+	at ChildProcess.exithandler (node:child_process:417:12)
+	at ChildProcess.emit (node:events:521:24)
+	at maybeClose (node:internal/child_process:1124:16)
+	at ChildProcess._handle.onexit (node:internal/child_process:306:5)] {
+  code: 9009,
+  killed: false,
+  signal: null,
+  cmd: 'python -c "import sys;print(sys.executable)"'
+}
+2026-09-11 12:07:17.116 [info] pythonRuntimeDiscoverer: recommended interpreter: undefined
+2026-09-11 12:07:17.116 [info] pythonRuntimeDiscoverer: discovered 0 Python interpreters
+2026-09-11 12:07:17.116 [info] pythonRuntimeDiscoverer: filtering interpreters
+2026-09-11 12:07:17.116 [info] pythonRuntimeDiscoverer: 0 Python interpreters remain after filtering
+2026-09-11 12:07:17.116 [info] pythonRuntimeDiscoverer: sorting interpreters
+2026-09-11 12:07:17.116 [info] Editor support is inactive since language server is set to None.
+2026-09-11 12:07:17.128 [info] CreateEnv Trigger - Skipping for c:\Users\User\paulo_labs
+2026-09-11 12:07:17.150 [info] > python -c "import sys;print(sys.executable)"
+2026-09-11 12:07:17.237 [info] pythonRuntimeDiscoverer: recommended for workspace: false
+2026-09-11 12:12:23.636 [info] CondaPythonPickerContribution returning 0 items
+2026-09-11 12:13:08.112 [info] CondaPythonPickerContribution returning 0 items
+
+```
+
+### R Language Pack
+
+* Showing last 50 of 202 lines
+
+```
+  "version": "4.6.1",
+  "arch": "x86_64",
+  "current": true,
+  "orthogonal": true,
+  "default": false
+}
+2026-09-11 12:07:14.990 [info] Log level: Info
+2026-09-11 12:07:14.990 [info] Registry key HKEY_LOCAL_MACHINE\SOFTWARE\R-core\R64\InstallPath reports the current R installation is at C:\Program Files\R\R-4.6.1
+2026-09-11 12:07:14.990 [info] Identified the current R binary: C:\Program Files\R\R-4.6.1\bin\x64\R.exe
+2026-09-11 12:07:14.990 [info] Skipping PATH-based R discovery (change this behavior with positron.r.interpreters.pathDiscoveryMode).
+2026-09-11 12:07:14.990 [info] Ignoring R headquarters directory C:\Users\User\AppData\Local\Programs\R because it does not exist.
+2026-09-11 12:07:14.990 [info] Registry key HKEY_LOCAL_MACHINE\SOFTWARE\R-core\R64\4.6.1\InstallPath reports an R installation at C:\Program Files\R\R-4.6.1
+2026-09-11 12:07:14.990 [info] Ignoring ad hoc R binary /usr/bin/R because it does not exist.
+2026-09-11 12:07:14.990 [info] Ignoring ad hoc R binary /usr/local/bin/R because it does not exist.
+2026-09-11 12:07:14.990 [info] Ignoring ad hoc R binary /opt/local/bin/R because it does not exist.
+2026-09-11 12:07:14.990 [info] Ignoring ad hoc R binary /opt/homebrew/bin/R because it does not exist.
+2026-09-11 12:07:14.990 [info] Candidate R binary at C:\Program Files\R\R-4.6.1\bin\x64\R.exe
+2026-09-11 12:07:14.990 [info] R installation discovered: {
+  "usable": true,
+  "supported": true,
+  "reasonDiscovered": [
+    "Found in Windows registry",
+    "Found in the primary location for R versions on this operating system"
+  ],
+  "reasonRejected": null,
+  "binpath": "C:\\Program Files\\R\\R-4.6.1\\bin\\x64\\R.exe",
+  "homepath": "C:\\Program Files\\R\\R-4.6.1",
+  "semVersion": {
+    "options": {},
+    "loose": false,
+    "includePrerelease": false,
+    "raw": "4.6.1",
+    "major": 4,
+    "minor": 6,
+    "patch": 1,
+    "prerelease": [],
+    "build": [],
+    "version": "4.6.1"
+  },
+  "version": "4.6.1",
+  "arch": "x86_64",
+  "current": true,
+  "orthogonal": true,
+  "default": false
+}
+2026-09-11 12:07:14.990 [info] Refreshing testthat status
+2026-09-11 12:07:15.015 [info] Not working in an R package
+2026-09-11 12:07:15.015 [info] Context key 'testthatIsConfigured' is 'false'
+2026-09-11 12:07:15.015 [info] Context key 'testthatHasTests' is 'false'
+
+```
+
+### R Kernel
+
+```
+2026-09-11 12:03:50.722 [info] r-ff2ec0b1 ** Begin kernel log for session R 4.6.1 (r-ff2ec0b1) at 9/11/2026, 12:03:50 PM **
+r-ff2ec0b1 Streaming kernel log file: C:\Users\User\AppData\Local\Temp\kernel-0GGBea\kernel.log
+2026-09-11 12:04:45.629 [info] r-ec1c7212 ** Begin kernel log for session R 4.6.1 (r-ec1c7212) at 9/11/2026, 12:04:45 PM **
+r-ec1c7212 Streaming kernel log file: C:\Users\User\AppData\Local\Temp\kernel-Q6Ol4w\kernel.log
+r-e2951b94 ** Begin kernel log for session R 4.6.1 (r-e2951b94) at 9/11/2026, 12:06:41 PM **
+r-e2951b94 Streaming kernel log file: C:\Users\User\AppData\Local\Temp\kernel-C7MZNr\kernel.log
+2026-09-11 12:12:25.191 [info] r-22d9754e ** Begin kernel log for session R 4.6.1 (r-22d9754e) at 9/11/2026, 12:12:25 PM **
+r-22d9754e Streaming kernel log file: C:\Users\User\AppData\Local\Temp\kernel-v3D96o\kernel.log
+r-ecab4e42 ** Begin kernel log for session R 4.6.1 (r-ecab4e42) at 9/11/2026, 12:13:09 PM **
+r-ecab4e42 Streaming kernel log file: C:\Users\User\AppData\Local\Temp\kernel-IozvuI\kernel.log
+
+```
+
+### R Supervisor
+
+```
+2026-09-11 12:03:51.254 [info] r-ff2ec0b1 Session R 4.6.1 (r-ff2ec0b1) created in C:\Users\User with command:
+2026-09-11 12:03:51.254 [info] r-ff2ec0b1 c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\ark\windows-x64\ark.exe --connection_file {connection_file} --log C:\Users\User\AppData\Local\Temp\kernel-0GGBea\kernel.log --startup-file c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\scripts\startup.R --session-mode console -- --interactive --no-restore-data --no-save
+2026-09-11 12:03:51.256 [info] r-ff2ec0b1 Session r-ff2ec0b1 established after 0ms
+2026-09-11 12:04:45.812 [info] r-ec1c7212 Session R 4.6.1 (r-ec1c7212) created in c:\Users\User\paulo_labs with command:
+2026-09-11 12:04:45.813 [info] r-ec1c7212 c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\ark\windows-x64\ark.exe --connection_file {connection_file} --log C:\Users\User\AppData\Local\Temp\kernel-Q6Ol4w\kernel.log --startup-file c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\scripts\startup.R --session-mode console -- --interactive --no-restore-data --no-save
+2026-09-11 12:04:45.813 [info] r-ec1c7212 Session r-ec1c7212 established after 0ms
+2026-09-11 12:06:41.815 [info] r-e2951b94 Session R 4.6.1 (r-e2951b94) created in c:\Users\User\paulo_labs with command:
+2026-09-11 12:06:41.815 [info] r-e2951b94 c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\ark\windows-x64\ark.exe --connection_file {connection_file} --log C:\Users\User\AppData\Local\Temp\kernel-C7MZNr\kernel.log --startup-file c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\scripts\startup.R --session-mode console -- --interactive --no-restore-data --no-save
+2026-09-11 12:06:41.816 [info] r-e2951b94 Session r-e2951b94 established after 0ms
+2026-09-11 12:12:25.229 [info] r-22d9754e Session R 4.6.1 (r-22d9754e) created in c:\Users\User\paulo_labs with command:
+2026-09-11 12:12:25.229 [info] r-22d9754e c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\ark\windows-x64\ark.exe --connection_file {connection_file} --log C:\Users\User\AppData\Local\Temp\kernel-v3D96o\kernel.log --startup-file c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\scripts\startup.R --session-mode console -- --interactive --no-restore-data --no-save
+2026-09-11 12:12:25.231 [info] r-22d9754e Session r-22d9754e established after 0ms
+2026-09-11 12:13:09.233 [info] r-ecab4e42 Session R 4.6.1 (r-ecab4e42) created in c:\Users\User\paulo_labs with command:
+2026-09-11 12:13:09.233 [info] r-ecab4e42 c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\ark\windows-x64\ark.exe --connection_file {connection_file} --log C:\Users\User\AppData\Local\Temp\kernel-IozvuI\kernel.log --startup-file c:\Users\User\AppData\Local\Programs\Positron\resources\app\extensions\positron-r\resources\scripts\startup.R --session-mode console -- --interactive --no-restore-data --no-save
+2026-09-11 12:13:09.234 [info] r-ecab4e42 Session r-ecab4e42 established after 0ms
+
+```
+

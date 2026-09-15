@@ -74,9 +74,32 @@ library(scales)
 theme_set(theme_minimal(base_size = 12))
 options(dplyr.summarise.inform = FALSE)
 
-data_candidates <- c("data", "../data/frozen")
-data_dir <- data_candidates[dir.exists(data_candidates)][1]
-stopifnot(length(data_dir) == 1, !is.na(data_dir))
+# Robustly locate the data directory by searching current and parent folders
+find_data_dir <- function(start = ".") {
+  start <- normalizePath(start, winslash = "/", mustWork = FALSE)
+  current <- start
+  while (TRUE) {
+    candidates <- c(
+      file.path(current, "data"),
+      file.path(current, "data", "frozen"),
+      file.path(current, "week01_lab", "data"),
+      file.path(current, "..", "data"),
+      file.path(current, "..", "data", "frozen")
+    )
+    for (p in candidates) {
+      if (dir.exists(p) && file.exists(file.path(p, "asset_prices_daily.csv"))) {
+        return(normalizePath(p, winslash = "/"))
+      }
+    }
+    parent <- dirname(current)
+    if (parent == current) break
+    current <- parent
+  }
+  return(NA_character_)
+}
+
+data_dir <- find_data_dir(".")
+stopifnot(!is.na(data_dir), dir.exists(data_dir), length(data_dir) == 1)
 ```
 
 ::: {.callout-note}
@@ -108,12 +131,44 @@ Use R to answer:
 
 ```{r}
 # Read the six CSV files here.
-
+asset_prices_daily <- read_csv(file.path(data_dir, "asset_prices_daily.csv"))
+asset_metadata <- read_csv(file.path(data_dir, "asset_metadata.csv"))
+vwrl_distributions <- read_csv(file.path(data_dir, "vwrl_distributions.csv"))
+ecb_eurusd_daily <- read_csv(file.path(data_dir, "ecb_eurusd_daily.csv"))
+ecb_estr_daily <- read_csv(file.path(data_dir, "ecb_estr_daily.csv"))
+transaction_cost_assumptions <- read_csv(file.path(data_dir, "transaction_cost_assumptions.csv"))
 ```
 
 ```{r}
 # Build a compact audit table and perform explicit duplicate and missing-value checks.
 
+# Audit table: rows, date range, currencies, and missing values by ticker
+audit_table <- asset_prices_daily |>
+  group_by(ticker) |>
+  summarise(
+    n_rows = n(),
+    first_date = min(date),
+    last_date = max(date),
+    currency = first(currency),
+    exchange = first(exchange),
+    missing_close = sum(is.na(close)),
+    missing_adj_close = sum(is.na(adj_close)),
+    .groups = "drop"
+  )
+
+# Check for ticker-date duplicates
+duplicate_check <- asset_prices_daily |>
+  count(ticker, date) |>
+  filter(n > 1)
+
+# Display results
+audit_table
+if (nrow(duplicate_check) > 0) {
+  cat("Duplicates found:\n")
+  print(duplicate_check)
+} else {
+  cat("No ticker-date duplicates found.\n")
+}
 ```
 
 ::: {.callout-tip title="A possible first AI prompt"}
@@ -124,6 +179,8 @@ Write beginner-friendly tidyverse R code that reads the six named CSV files from
 
 **Your answer:**
 
+`group_by(ticker)` ensures that `lag()` operates within each ticker independently. Without it, `lag()` would create lags across ticker boundaries, incorrectly pairing prices from different assets. `arrange(date, .by_group = TRUE)` orders observations chronologically within each ticker group so that `lag()` correctly references the previous trading day for that specific asset. Together, they ensure each asset's returns are calculated from its own previous price, not from another asset's price.
+
 
 ## Task 2 — Reconstruct VWRL total returns
 
@@ -132,7 +189,7 @@ Use the Amsterdam listing `VWRL.AS`. Its closing price and cash distribution are
 Calculate:
 
 $$
-G_t^P=\frac{P_t}{P_{t-1}}, \qquad
+sG_t^P=\frac{P_t}{P_{t-1}}, \qquad
 R_t^P=G_t^P-1,
 $$
 
@@ -160,6 +217,69 @@ Steps:
 ```{r}
 # Construct and compare the three VWRL return series.
 
+# Step 1: Filter to VWRL.AS and arrange by date
+vwrl <- asset_prices_daily |>
+  filter(ticker == "VWRL.AS") |>
+  arrange(date)
+
+# Step 2: Left join with distributions using event_date_vendor
+vwrl <- vwrl |>
+  left_join(
+    vwrl_distributions |> select(event_date_vendor, amount_eur_vendor),
+    by = c("date" = "event_date_vendor")
+  )
+
+# Step 3: Replace missing distributions with zero
+vwrl <- vwrl |>
+  mutate(amount_eur_vendor = replace_na(amount_eur_vendor, 0))
+
+# Step 4: Calculate the three return series
+vwrl <- vwrl |>
+  group_by(ticker) |>
+  arrange(date, .by_group = TRUE) |>
+  mutate(
+    # Price return: G_t^P = P_t / P_{t-1}, R_t^P = G_t^P - 1
+    price_gross = close / lag(close),
+    price_return = price_gross - 1,
+    
+    # Total return: G_t^TR = (P_t + D_t) / P_{t-1}, R_t^TR = G_t^TR - 1
+    total_gross = (close + amount_eur_vendor) / lag(close),
+    total_return = total_gross - 1,
+    
+    # Adjusted-close return: R_t^A = A_t / A_{t-1} - 1
+    adj_close_gross = adj_close / lag(adj_close),
+    adj_close_return = adj_close_gross - 1
+  ) |>
+  ungroup()
+
+# Step 5: Inspect at least one distribution date
+vwrl |>
+  filter(amount_eur_vendor > 0) |>
+  select(date, close, amount_eur_vendor, price_return, total_return, adj_close_return) |>
+  head(1)
+
+# Step 6: Verify one return manually
+# Pick a distribution date and check the calculation
+dist_date_row <- vwrl |> filter(amount_eur_vendor > 0) |> slice(1)
+prev_row <- vwrl |> filter(date == dist_date_row$date - 1)
+
+cat("Manual verification:\n")
+cat("Previous close:", prev_row$close[[1]], "\n")
+cat("Current close:", dist_date_row$close, "\n")
+cat("Distribution:", dist_date_row$amount_eur_vendor, "\n")
+cat("Total return (manual):", (dist_date_row$close + dist_date_row$amount_eur_vendor) / prev_row$close[[1]] - 1, "\n")
+cat("Total return (calculated):", dist_date_row$total_return, "\n")
+
+# Step 7: Report differences between reconstructed and adjusted-close returns
+differences <- vwrl |>
+  mutate(abs_diff = abs(total_return - adj_close_return)) |>
+  summarise(
+    median_abs_diff = median(abs_diff, na.rm = TRUE),
+    max_abs_diff = max(abs_diff, na.rm = TRUE)
+  )
+
+cat("\nDifferences between reconstructed total return and adjusted-close return:\n")
+print(differences)
 ```
 
 ::: {.callout-warning}
@@ -169,9 +289,16 @@ Steps:
 **Code checks.** Explain:
 
 - why a left join from prices to distributions is appropriate;
+  A left join preserves all price observations (the left table) and adds distribution data only on matching dates. This is correct because we need a return for every trading day, but distributions occur infrequently. A left join keeps all price rows intact and joins distributions when available.
+
 - why missing distributions become zero rather than deleting the row;
+  On non-distribution dates, no cash was paid to the investor, so the distribution amount is economically zero. Deleting rows would lose price observations and break the time series. Treating missing distributions as zero correctly reflects that total returns equal price returns on those dates.
+
 - why `amount_usd` cannot be added directly to the EUR price of `VWRL.AS`;
+  `VWRL.AS` prices are in EUR, but `amount_usd` is in USD. Adding them would be dimensionally inconsistent—mixing EUR and USD currencies. The total return formula requires the distribution and price to be in the same currency. The data provides `amount_eur_vendor`, which is already converted to EUR and can be added correctly.
+
 - why the first return is missing.
+  Return calculations use `lag()` to reference the previous day's price: $R_t = \frac{P_t}{P_{t-1}} - 1$. On the first trading day (2 January 2020), there is no prior day's price to lag to, so the return is undefined (NA). This is unavoidable in return series.
 
 ## Task 3 — Change the investor's currency
 
@@ -207,6 +334,80 @@ Perform two conversions:
 ```{r}
 # Convert the two USD listings to EUR and validate the VWRD conversion.
 
+# Load FX rate data
+fx_rates <- ecb_eurusd_daily
+
+# Convert VWRD.L (USD to EUR)
+vwrd_eur <- asset_prices_daily |>
+  filter(ticker == "VWRD.L") |>
+  arrange(date) |>
+  left_join(fx_rates, by = "date") |>
+  mutate(
+    # Level conversion: P_t^EUR = P_t^USD / X_t
+    adj_close_eur = adj_close / usd_per_eur,
+    # Calculate USD returns
+    adj_close_usd_return = adj_close / lag(adj_close) - 1,
+    # Calculate FX return
+    fx_return = lag(usd_per_eur) / usd_per_eur - 1,
+    # Calculate EUR return via level conversion
+    adj_close_eur_return = adj_close_eur / lag(adj_close_eur) - 1,
+    # Validate: gross EUR return should equal gross USD return * (X_{t-1} / X_t)
+    adj_close_eur_return_check = (1 + adj_close_usd_return) * (1 + fx_return) - 1
+  ) |>
+  select(date, close, adj_close, usd_per_eur, adj_close_eur, 
+         adj_close_usd_return, fx_return, adj_close_eur_return, adj_close_eur_return_check)
+
+# Convert PHAU.L (USD to EUR)
+phau_eur <- asset_prices_daily |>
+  filter(ticker == "PHAU.L") |>
+  arrange(date) |>
+  left_join(fx_rates, by = "date") |>
+  mutate(
+    # Level conversion: P_t^EUR = P_t^USD / X_t
+    adj_close_eur = adj_close / usd_per_eur
+  ) |>
+  select(date, ticker, close, adj_close, adj_close_eur, usd_per_eur)
+
+# Comparison: VWRD.L EUR returns vs VWRL.AS returns
+vwrl_compare <- vwrl |>
+  filter(ticker == "VWRL.AS") |>
+  select(date, ticker, adj_close_return)
+
+comparison <- vwrd_eur |>
+  select(date, adj_close_eur_return) |>
+  mutate(ticker_vwrd = "VWRD.L (converted to EUR)") |>
+  left_join(vwrl_compare, by = "date") |>
+  filter(!is.na(adj_close_eur_return) & !is.na(adj_close_return)) |>
+  mutate(return_difference = abs(adj_close_eur_return - adj_close_return)) |>
+  select(date, ticker_vwrd, ticker, adj_close_eur_return, adj_close_return, return_difference)
+
+cat("VWRD.L (EUR) vs VWRL.AS return comparison on common dates:\n")
+print(comparison |> head(10))
+
+cat("\nReturn difference statistics:\n")
+print(comparison |> summarise(
+  mean_abs_diff = mean(return_difference, na.rm = TRUE),
+  median_abs_diff = median(return_difference, na.rm = TRUE),
+  max_abs_diff = max(return_difference, na.rm = TRUE)
+))
+
+# Validation: Show that direct level conversion and gross-return multiplication give same EUR return
+cat("\n\nValidation: Direct conversion vs gross-return multiplication\n")
+validation_sample <- vwrd_eur |>
+  filter(!is.na(adj_close_eur_return) & !is.na(adj_close_eur_return_check)) |>
+  select(date, adj_close_eur_return, adj_close_eur_return_check, 
+         adj_close_usd_return, fx_return) |>
+  head(5)
+print(validation_sample)
+
+cat("\nDifference between methods (should be near zero):\n")
+print(vwrd_eur |>
+  mutate(method_diff = adj_close_eur_return - adj_close_eur_return_check) |>
+  filter(!is.na(method_diff)) |>
+  summarise(
+    max_method_diff = max(abs(method_diff), na.rm = TRUE),
+    mean_method_diff = mean(abs(method_diff), na.rm = TRUE)
+  ))
 ```
 
 **Before running the code:** if the euro depreciates against the dollar while the USD asset price is unchanged, should its EUR value rise or fall?
@@ -239,6 +440,101 @@ The actual/360 convention and the calendar-day count ensure that weekend and hol
 ```{r}
 # Construct the safe gross-return series and safe-account index.
 
+# Prepare €STR observations and compute accrual using the prior observation's rate
+estr <- ecb_estr_daily |>
+  arrange(date) |>
+  mutate(
+    lag_estr = lag(estr_percent),
+    delta_days = as.integer(date - lag(date)),
+    # G_{f,t} = 1 + y_{t-1}/100 * (Delta d_t / 360)
+    G_f = if_else(is.na(lag_estr), 1, 1 + (lag_estr/100) * (delta_days / 360))
+  ) |>
+  mutate(
+    # Safe-account index B with B_0 = 1
+    B = cumprod(G_f)
+  )
+
+# Check Friday-to-Monday intervals (delta_days == 3)
+ftm_checks <- estr |>
+  filter(!is.na(delta_days)) |>
+  filter(delta_days == 3) |>
+  select(date, lag_estr, delta_days, G_f) |>
+  head(10)
+
+cat("Friday-to-Monday samples (delta_days == 3):\n")
+print(ftm_checks)
+cat("Count of 3-day intervals:", sum(estr$delta_days == 3, na.rm = TRUE), "\n")
+cat("Count of 1-day intervals:", sum(estr$delta_days == 1, na.rm = TRUE), "\n")
+
+# Build EUR-level series on common dates
+global_equity_eur <- vwrl |>
+  select(date, global_equity_eur = adj_close)
+
+euro_government_bonds <- asset_prices_daily |>
+  filter(ticker == "IEGA.AS") |>
+  select(date, euro_government_bonds = adj_close)
+
+physical_gold_eur <- phau_eur |>
+  select(date, physical_gold_eur = adj_close_eur)
+
+# Inner join to keep dates available for every series
+library(purrr)
+common_panel <- reduce(list(global_equity_eur, euro_government_bonds, physical_gold_eur, estr |>
+                               select(date, B, G_f)), ~inner_join(.x, .y, by = "date")) |>
+  arrange(date)
+
+# Compute gross returns and exact discounted (excess) returns
+common_panel <- common_panel |>
+  mutate(
+    G_global = global_equity_eur / lag(global_equity_eur),
+    G_bonds = euro_government_bonds / lag(euro_government_bonds),
+    G_gold = physical_gold_eur / lag(physical_gold_eur),
+    # G_f already on panel as G_f
+    G_global_e = G_global / G_f,
+    R_global_e = G_global_e - 1,
+    r_global_e = log(G_global_e),
+    G_bonds_e = G_bonds / G_f,
+    R_bonds_e = G_bonds_e - 1,
+    r_bonds_e = log(G_bonds_e),
+    G_gold_e = G_gold / G_f,
+    R_gold_e = G_gold_e - 1,
+    r_gold_e = log(G_gold_e)
+  )
+
+# Validation for every asset:
+validate_asset <- function(level, G_e, B_index) {
+  # product of G_e across sample (exclude NA)
+  prod_Ge <- prod(G_e, na.rm = TRUE)
+  # Use first/last non-NA level and B_index values to compute ratios
+  level_non_na <- level[!is.na(level)]
+  B_non_na <- B_index[!is.na(B_index)]
+  if (length(level_non_na) < 2 || length(B_non_na) < 2) {
+    return(tibble(prod_Ge = prod_Ge, W_ratio = NA_real_, B_ratio = NA_real_, target = NA_real_, diff = NA_real_))
+  }
+  W_ratio <- tail(level_non_na, 1) / head(level_non_na, 1)
+  B_ratio <- tail(B_non_na, 1) / head(B_non_na, 1)
+  target <- W_ratio / B_ratio
+  tibble(prod_Ge = prod_Ge, W_ratio = W_ratio, B_ratio = B_ratio, target = target, diff = prod_Ge - target)
+}
+
+val_global <- validate_asset(common_panel$global_equity_eur, common_panel$G_global_e, common_panel$B)
+val_bonds  <- validate_asset(common_panel$euro_government_bonds, common_panel$G_bonds_e, common_panel$B)
+val_gold   <- validate_asset(common_panel$physical_gold_eur, common_panel$G_gold_e, common_panel$B)
+
+validation <- bind_rows(
+  tibble(asset = "global_equity_eur") |> bind_cols(val_global),
+  tibble(asset = "euro_government_bonds") |> bind_cols(val_bonds),
+  tibble(asset = "physical_gold_eur") |> bind_cols(val_gold)
+)
+
+cat("\nValidation results (product of discounted gross-returns vs target ratio):\n")
+print(validation)
+
+# Quick sample of computed excess returns
+cat("\nSample excess returns (first 6 rows):\n")
+print(common_panel |>
+        select(date, R_global_e, R_bonds_e, R_gold_e) |>
+        slice_head(n = 6))
 ```
 
 Check several Friday-to-Monday observations. Confirm that their day count is normally three rather than one.
@@ -264,6 +560,47 @@ $$
 
 ```{r}
 # Make the common-date panel and calculate nominal and excess returns.
+
+common_panel <- reduce(list(global_equity_eur, euro_government_bonds, physical_gold_eur, estr |> select(date, B, G_f)), ~inner_join(.x, .y, by = "date")) |>
+  arrange(date)
+
+common_panel <- common_panel |>
+  mutate(
+    G_global = global_equity_eur / lag(global_equity_eur),
+    G_bonds = euro_government_bonds / lag(euro_government_bonds),
+    G_gold = physical_gold_eur / lag(physical_gold_eur),
+    G_global_e = G_global / G_f,
+    R_global_e = G_global_e - 1,
+    r_global_e = log(G_global_e),
+    G_bonds_e = G_bonds / G_f,
+    R_bonds_e = G_bonds_e - 1,
+    r_bonds_e = log(G_bonds_e),
+    G_gold_e = G_gold / G_f,
+    R_gold_e = G_gold_e - 1,
+    r_gold_e = log(G_gold_e)
+  )
+
+# Validation using existing helper
+val_global <- validate_asset(common_panel$global_equity_eur, common_panel$G_global_e, common_panel$B)
+val_bonds <- validate_asset(common_panel$euro_government_bonds, common_panel$G_bonds_e, common_panel$B)
+val_gold <- validate_asset(common_panel$physical_gold_eur, common_panel$G_gold_e, common_panel$B)
+
+validation <- bind_rows(
+  tibble(asset = "global_equity_eur") |> bind_cols(val_global),
+  tibble(asset = "euro_government_bonds") |> bind_cols(val_bonds),
+  tibble(asset = "physical_gold_eur") |> bind_cols(val_gold)
+)
+
+cat("Validation results (product of discounted gross-returns vs target ratio):\n")
+print(validation)
+
+# Report maximum absolute difference (should be near zero)
+cat("\nMax absolute difference: \n")
+print(validation |> mutate(abs_diff = abs(prod_Ge - target)) |> summarise(max_abs_diff = max(abs_diff, na.rm = TRUE)))
+
+# Show first rows of excess returns
+cat("\nSample excess returns (first 6 rows):\n")
+print(common_panel |> select(date, R_global_e, R_bonds_e, R_gold_e) |> slice_head(n = 6))
 
 ```
 

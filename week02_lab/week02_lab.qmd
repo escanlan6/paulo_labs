@@ -1,0 +1,386 @@
+---
+title: "Week 2 laboratory"
+subtitle: "Return distributions across asset classes"
+author: "MTH1097 Financial and Actuarial Data Analysis"
+format:
+  html:
+    theme: cosmo
+    css: lab.css
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    embed-resources: true
+    html-math-method: katex
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Purpose
+
+**How well does a normal/lognormal model describe different asset classes, and which financial conclusions depend on it?**
+
+This is a two-hour formative laboratory. Nothing is submitted for marks. Complete the tasks in this worksheet and retain the rendered HTML as a record of your work.
+
+You will estimate models, diagnose their departures from the data, examine correctly calibrated tests, and explore a jump scenario. The four series are the same investments as in Week 1:
+
+| Series | Exposure | Investor currency |
+|---|---|---|
+| Equities | VWRL.AS, global equities | EUR |
+| Bonds | IEGA.AS, euro government bonds | EUR |
+| Gold | PHAU.L, physical gold converted from USD | EUR |
+| Portfolio | 60% equities, 30% bonds, 10% gold | EUR |
+
+The supplied returns use the lecture's frozen 2020–2025 data. They are **nominal total returns**, without safe-account discounting or transaction costs. The portfolio resets its weights at each common observation. This differs from the excess-return calculations and transaction-cost exercise in Week 1.
+
+## Working with AI
+
+Continue the Week 1 workflow:
+
+1. State the financial question and predict one feature of the answer.
+2. Request one small piece of R code.
+3. Read and explain it before running it.
+4. Check definitions, units and numerical identities.
+5. Interpret the result in your own words.
+
+Use the supplied R reference for function names and assumptions. Ask AI to simplify any code you cannot explain. Never accept a model merely because a function runs or a p-value is large.
+
+## Timing and outputs
+
+| Minutes | Task | Keep in your worksheet |
+|---|---|---|
+| 0–10 | Audit the verified returns | Audit table and identity checks |
+| 10–30 | Fit the normal/lognormal benchmark | Parameter and one-day outcome table |
+| 30–55 | Compare graphical evidence | Histograms and QQ plots for all four series |
+| 55–80 | Compare daily and monthly normality tests | Test tables, sample sizes and interpretations |
+| 80–95 | Investigate KS calibration | Simulation comparison and an explanation of refitting |
+| 95–110 | Explore a jump scenario | Model comparison and a change of one parameter |
+| 110–120 | Write the conclusion | Six to eight evidence-based sentences |
+
+Extensions are optional. Complete the cross-asset comparison before attempting them.
+
+## Setup
+
+Extract the whole student ZIP and open its folder. Run this chunk first.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(scales)
+
+lab_candidates <- c(".", "..", "week02/lab")
+lab_dir <- lab_candidates[
+  file.exists(file.path(lab_candidates, "week02_lab_helpers.R"))
+][1]
+stopifnot(!is.na(lab_dir))
+source(file.path(lab_dir, "week02_lab_helpers.R"))
+
+data_candidates <- c(file.path(lab_dir, "data"),
+                     file.path(lab_dir, "../data/frozen"))
+data_dir <- data_candidates[
+  file.exists(file.path(data_candidates, "returns_daily_eur.csv"))
+][1]
+stopifnot(!is.na(data_dir))
+
+daily <- read_csv(file.path(data_dir, "returns_daily_eur.csv"),
+                  show_col_types = FALSE)
+monthly <- read_csv(file.path(data_dir, "returns_monthly_eur.csv"),
+                    show_col_types = FALSE)
+asset_order <- c("Equities", "Bonds", "Gold", "Portfolio")
+daily <- daily |> mutate(asset = factor(asset, levels = asset_order))
+monthly <- monthly |> mutate(asset = factor(asset, levels = asset_order))
+
+theme_set(theme_minimal(base_size = 12))
+options(dplyr.summarise.inform = FALSE)
+```
+
+`week02_r_reference.html` explains the supplied functions. `DATA_DICTIONARY.md` explains the columns. Return values are decimals: `0.01` means 1%.
+
+::: {.callout-note}
+The blank worksheet renders successfully. Add your code in the task chunks, then render again to include your results. The supplied HTML is a reading copy of the blank worksheet.
+:::
+
+## Task 1: Audit and reconnect to Week 1
+
+**Before running:** which identity should connect the portfolio's simple return to its three components?
+
+1. Report the number of observations and the first and last interval dates for each series, separately for daily and monthly data.
+2. Check for duplicate asset-date pairs, missing return values and nonpositive gross returns. Do not drop rows silently.
+3. Verify, to within $10^{-12}$,
+   $G=\exp(r)$ and $R=\exp(r)-1$.
+4. Put the four daily simple returns side by side by date. Verify
+
+$$
+R_{P,t}=0.6R_{E,t}+0.3R_{B,t}+0.1R_{G,t},
+\qquad r_{P,t}=\log(1+R_{P,t}).
+$$
+
+```{r}
+# Produce the daily/monthly audit table and perform the checks.
+
+```
+
+::: {.callout-tip title="A possible AI prompt"}
+Using the existing daily and monthly data frames, write a small audit grouped by asset. Count observations and duplicate asset-date pairs, check the three return columns for missing values, and check the two exponential identities. Explain each check. Do not remove observations.
+:::
+
+**Checkpoint:** 1,510 daily return intervals and 71 monthly return intervals per series. All four series use the same interval endpoints within each frequency.
+
+<details class="concept">
+<summary>Why must portfolio simple returns be weighted before taking logs? Click after writing your answer.</summary>
+<div class="answer"><p>A weighted sum of simple returns follows from the self-financing wealth calculation with starting weights. The log is nonlinear, so averaging component log returns generally gives a different portfolio return.</p></div>
+</details>
+
+**Interval convention.** “Daily” means one common trading-observation step. Weekends and exchange holidays can make its calendar length exceed one day. Monthly data use non-overlapping end-of-month wealth ratios, starting with February 2020. The first incomplete month is excluded.
+
+## Task 2: Fit a benchmark and calculate investment outcomes
+
+For each daily series, estimate the normal log-return parameters using
+
+$$
+\widehat m=\bar r,\qquad
+\widehat s=\sqrt{\frac{1}{n-1}\sum_{i=1}^n(r_i-\bar r)^2}.
+$$
+
+**Predict first:** will the asset with the largest daily standard deviation also have the largest fitted one-day VaR?
+
+For initial wealth $V=\text{EUR }100{,}000$ and $\alpha=99\%$, calculate:
+
+$$
+E[R]=e^{\widehat m+\widehat s^2/2}-1,\quad
+\operatorname{median}(R)=e^{\widehat m}-1,\quad
+P(R<0)=\Phi(-\widehat m/\widehat s),
+$$
+
+$$
+L=-VR,\qquad
+\operatorname{VaR}_{.99}(L)
+=V\left[1-\exp\{\widehat m+\widehat s\,\Phi^{-1}(.01)\}\right].
+$$
+
+These are **one-day model outcomes**, meaning one common observation step. Use daily estimates directly; no annualisation is needed. The lecture's numerical VaR example was one year, so its amounts should not match this table.
+
+1. Build one row per series with $n$, $\widehat m$, $\widehat s$, fitted mean and median simple returns, loss probability and VaR.
+2. Use `normal_outcomes()` to check your direct calculations for at least one series.
+3. Verify that fitted mean simple return is at least fitted median simple return.
+4. Compare the observed simple returns with the fitted lower 1% quantile. Report the fraction falling below it.
+
+```{r}
+# Estimate the four models and calculate one-day outcomes.
+# Label percentages, EUR amounts, horizon and confidence level.
+
+```
+
+**Your interpretation:** which comparison agrees with your prediction? Explain the difference between volatility and the probability of any loss.
+
+<details class="concept">
+<summary>Does a fitted 99% VaR mean that larger losses are impossible?</summary>
+<div class="answer"><p>No. Under the continuous fitted model, 1% of losses exceed this threshold. Historical exceedances here use the same sample as the fit, so they are an in-sample diagnostic, not a forecast validation.</p></div>
+</details>
+
+## Task 3: Diagnose the distribution graphically
+
+**Predict first:** which series do you expect to have the most pronounced departures after dividing by its own standard deviation?
+
+1. Make four histograms of daily log returns and overlay the corresponding fitted normal densities. Use density, not frequency, on the vertical axis. Label axis ranges if they differ across assets.
+2. Standardise each series separately:
+   $z_{i}=(r_i-\widehat m)/\widehat s$.
+3. Make four QQ plots with theoretical standard-normal quantiles horizontally, ordered standardised observations vertically, and the line $y=x$.
+4. Calculate sample skewness and excess kurtosis using `return_moments()`.
+5. For each asset, write one sentence about the centre, symmetry and tails. Compare the portfolio's volatility and excess kurtosis with equities.
+
+```{r}
+# Histograms with fitted normal density overlays.
+
+```
+
+```{r}
+# Standardised QQ plots, moment table, and your interpretation.
+
+```
+
+::: {.callout-tip title="Plotting check"}
+For faceted density overlays, create a separate grid and fitted density for each asset, then pass that data frame to `geom_line()`. A single ungrouped density curve would use the wrong parameters for some panels.
+:::
+
+<details class="concept">
+<summary>What shape indicates more extreme observations than a normal reference?</summary>
+<div class="answer"><p>With theoretical quantiles on the horizontal axis, the left tail bends below the line and the right tail above it. Unequal departures can indicate asymmetry. Location and scale adjustments alone cannot remove this curvature.</p></div>
+</details>
+
+**Keep your graphical diagnosis before moving on to p-values.**
+
+## Task 4: Tests, asset classes and observation frequency
+
+The reference hypothesis is that observations are IID normal with unknown mean and variance. The core tests are:
+
+| Test | Discrepancy | Reference used here |
+|---|---|---|
+| Shapiro–Wilk | Ordered sample values relative to normal order statistics | R's normality-test implementation |
+| Jarque–Bera | Skewness and kurtosis | Asymptotic chi-square with 2 degrees of freedom |
+| Anderson–Darling | Weighted CDF differences, emphasising both tails | Normal simulations with mean and sample SD refitted |
+
+Use the provided functions as follows. This is a function-use example; apply it to all four series.
+
+```{r}
+#| eval: false
+x <- daily$log_return[daily$asset == "Equities"]
+daily_reference <- normal_mc_reference(n = length(x), B = 4999)
+normal_tests(x, daily_reference)
+```
+
+Generate **one reference per sample size**. The same reference serves every asset at that frequency because fitted-normal statistics are invariant to location and scale. Do not reuse the daily reference for the monthly sample.
+
+1. Produce daily and monthly tables of $n$, SW, JB and AD p-values for all four series.
+2. Display very small p-values as `<0.0001`; use `format_p(p, B=4999)` for AD. An asterisk marks the smallest simulated value, $1/5000$, rather than a p-value of zero.
+3. Add QQ plots of daily and monthly equities, standardised separately.
+4. Compare the test results with your graphical diagnosis.
+5. Explain any disagreement between tests, and what changed between frequencies.
+
+```{r}
+# Generate daily and monthly references, run the tests and construct tables.
+
+```
+
+```{r}
+# Daily/monthly equity QQ comparison and written interpretation.
+
+```
+
+**Write before opening the explanation:** “The monthly p-value is larger, therefore monthly returns are normal.” What is missing?
+
+<details class="concept">
+<summary>Show the interpretation guide.</summary>
+<div class="answer"><p>Aggregation changes the return distribution, but it also reduces the sample from 1,510 to 71 observations. Tests may have less power. Non-rejection does not confirm normality. The reference also assumes independence and stable parameters, which these marginal plots and tests do not establish.</p></div>
+</details>
+
+Do not choose the largest p-value as a model-selection score or count tests as independent votes. These are related descriptive investigations; a formal search for multiple discoveries would need an explicit multiplicity procedure.
+
+## Task 5: Why KS needs refitting
+
+The observed KS statistic compares the empirical CDF with a normal CDF fitted to the same sample. A fair reference must reproduce that fitting step.
+
+Use **monthly equities** and the supplied experiment:
+
+```{r}
+#| eval: false
+x_month <- monthly$log_return[monthly$asset == "Equities"]
+experiment <- ks_refit_experiment(x_month, B = 4999, seed = 209702)
+experiment$p_values
+```
+
+Open `ks_refit_experiment()` in `week02_lab_helpers.R`. Identify the lines that:
+
+1. fit the original mean and SD;
+2. generate a new sample from those original parameters;
+3. compare it with the original CDF;
+4. refit mean and SD for the simulated comparison.
+
+Then run the experiment and:
+
+- plot the fixed-parameter and refitted reference statistics side by side, using common axes;
+- mark the observed statistic on both panels;
+- compare ordinary KS, fixed-parameter simulation and simulation with refitting;
+- explain why the first two answer the wrong reference question here.
+
+```{r}
+# Run the experiment, plot its two reference distributions, and explain the p-values.
+
+```
+
+<details class="concept">
+<summary>Which parameters remain fixed, and which must change?</summary>
+<div class="answer"><p>The original estimates remain fixed as the generator of every bootstrap sample. Each new sample then gets its own estimates for calculating its discrepancy. Omitting that second fit compares the observed statistic with a different procedure, typically inflating the fitted-normal KS p-value.</p></div>
+</details>
+
+The correctly refitted p-value need not equal the lecture's simulated value exactly: the random seed is different. A useful scale for Monte Carlo error away from zero is $\sqrt{\widehat p(1-\widehat p)/B}$. The ordinary analytic KS value should agree for the identical sample.
+
+## Task 6: A jump scenario with a financial mechanism
+
+Use Merton's model to investigate occasional discrete repricing:
+
+$$
+r_h=ah+\sigma\sqrt h\,Z+\sum_{j=1}^{N_h}Y_j,\quad
+N_h\sim\operatorname{Poisson}(\lambda h),\quad
+Y_j\sim N(m_J,s_J^2).
+$$
+
+Here $Z\sim N(0,1)$ and the components are independent. The supplied `jump_model()` sets
+
+$$
+a=\mu-\sigma^2/2-\lambda\left(e^{m_J+s_J^2/2}-1\right),
+\qquad E[e^{r_h}]=e^{\mu h}.
+$$
+
+Start with the lecture's **illustrative** annual parameters:
+$\mu=8\%$, $\sigma=14\%$, $\lambda=2$, $m_J=-4\%$, $s_J=6\%$,
+and horizon $h=1/252$ year.
+
+```{r}
+#| eval: false
+base_model <- jump_model()
+r_jump <- simulate_jump_returns(100000, base_model, seed = 209706)
+```
+
+1. Simulate the base scenario. Check the sample mean of `exp(r_jump)` against `base_model$expected_gross`, allowing for Monte Carlo error.
+2. Simulate a normal comparator using `base_model$log_mean` and `sqrt(base_model$log_variance)`. These match the log moments, not necessarily expected wealth.
+3. For each model, report the **one-day 0.1% and 99.9% simple-return quantiles**, and corresponding wealth quantiles for EUR 100,000. Use analytical normal quantiles and `jump_quantile()` as numerical checks.
+4. **Predict first:** what changes if expected jump frequency rises from 2 to 4 per year? Set `jump_model(lambda=4)` and rerun the comparison. Recompute the matched normal comparator for the new scenario.
+5. Explain why the helper must also change the drift $a$.
+6. Identify one feature in an observed asset's QQ plot that makes jumps worth investigating. State one reason this exercise does not validate the model for that asset.
+
+```{r}
+# Base and higher-frequency scenarios, matched normal comparators, checks and quantiles.
+
+```
+
+<details class="concept">
+<summary>What remains constant when lambda changes through jump_model()?</summary>
+<div class="answer"><p>The chosen expected wealth growth remains exp(mu*h), because the drift correction changes with jump frequency. The distribution and its log moments can still change. A normal comparator matching those log moments must be recalculated.</p></div>
+</details>
+
+The extreme-quantile estimates use roughly 100 observations in each 0.1% tail when simulating 100,000 draws, so simulation uncertainty matters. Numerical model quantiles help separate simulation noise from model differences. Inspect both tails: a jump model need not give more extreme quantiles at every probability.
+
+These are scenarios, not fitted models of the historical assets. Do not fit Student-t log returns: as discussed in the lecture, exponentiating them gives infinite expected wealth.
+
+## Task 7: The comparative conclusion
+
+Write six to eight sentences answering:
+
+1. How does the portfolio's daily volatility and one-day VaR compare with equities?
+2. Does diversification also make the standardised tail shape more normal in this sample?
+3. Which graphical departures agree with the tests?
+4. What can and cannot be inferred from the monthly results?
+5. What does the KS refitting experiment demonstrate?
+6. What changes in the jump scenario, and what remains only a model assumption?
+
+Support every numerical claim with your own checked results. Distinguish empirical observations, fitted-model calculations and illustrative simulations.
+
+**Your conclusion:**
+
+## Optional extensions
+
+- **Weekly frequency:** repeat the comparison using `returns_weekly_eur.csv`. Check sample size before generating the reference.
+- **A different discrepancy:** inspect CvM and refitted KS results already returned by `normal_tests()`. Explain how they differ from AD without treating p-values as a ranking.
+- **Write the bootstrap:** implement a short refitting loop yourself, then compare it with the helper using the same seed and statistic.
+- **Time ordering:** shuffle equity returns and compare the original and shuffled plots. Verify that moments and normality-test statistics remain unchanged although the time pattern changes.
+- **Combined D’Agostino–Pearson:** research a documented implementation of the combined $K^2$ test and its sample-size conditions before using it. Identify the skewness and kurtosis components. This is not required for the core lab.
+
+## Completion checklist
+
+- [ ] Return definitions, EUR units and interval endpoints are explicit.
+- [ ] Portfolio simple-return arithmetic and exponential identities reconcile.
+- [ ] Every model outcome states its horizon, amount and confidence or quantile level.
+- [ ] All four series have labelled histograms and standardised QQ plots.
+- [ ] Daily and monthly test tables show sample size and calibration.
+- [ ] Monte Carlo p-values retain their resolution limit.
+- [ ] You can explain the generating fit and the replicate-specific fit.
+- [ ] Jump scenarios are labelled illustrative and their expected-growth check passes.
+- [ ] Your conclusion separates evidence from model assumptions.
+
+The companion R reference supplies documentation links and explains every helper used here.

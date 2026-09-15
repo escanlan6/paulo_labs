@@ -1,0 +1,49 @@
+dataset: 'Week 2: models and tests for return distributions'
+source_freeze: Week 1, created 2026-09-04; no refreshed prices
+source_md5:
+  asset_prices_daily.csv: d8e79d0133159343c26f090b1e58d8f3
+  asset_metadata.csv: b3bf0f99af20faf1e5f279799bdfaf64
+  ecb_eurusd_daily.csv: b530424de265aaeb89584b4f588b8ced
+  ecb_estr_daily.csv: 76a3d58546cf997007efe0a365fee699
+date_start: '2020-01-02'
+date_end: '2025-12-31'
+daily_intervals: 1510
+monthly_intervals: 71
+investor_currency: EUR
+returns: Nominal total returns; decimal units
+prices: Adjusted-close ratios for equities/bonds; gold USD adjusted level divided
+  by USD per EUR
+calendar: Common levels first, then returns; common ECB FX and STR date calendar as
+  in Week 1
+observation_clock: Consecutive common trading observations; equal-step model is an
+  approximation
+portfolio: 60/30/10 equity/bond/gold; daily reset at common observations, frictionless
+monthly: Ratios of end-of-month wealth; first incomplete month excluded
+tests: IID normal reference; SW and asymptotic JB; KS/CvM/AD Monte Carlo with mean
+  and sample SD refitted
+bootstrap_B: 4999
+warning: P-values do not establish marginal normality in dependent data or validate
+  forecasts
+illustrative_parameters:
+  lognormal:
+    mu: 0.08
+    sigma: 0.2
+    h: 1.0
+  merton:
+    mu: 0.08
+    sigma: 0.14
+    lambda: 2.0
+    jump_mean: -0.04
+    jump_sd: 0.06
+simulation_seeds:
+- 109716.0
+- 109725.0
+- 109739.0
+- 109747.0
+- 109748.0
+validation:
+  wealth_reconciliation: passed
+  portfolio_identity: passed
+  transformations: passed
+  merton_mgf: passed
+  merton_density_mass: 1.0

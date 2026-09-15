@@ -1,0 +1,218 @@
+---
+title: "Week 2 laboratory: R reference"
+subtitle: "Functions, conventions and interpretation"
+author: "MTH1097 Financial and Actuarial Data Analysis"
+format:
+  html:
+    theme: cosmo
+    css: lab.css
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    code-fold: false
+    embed-resources: true
+    html-math-method: katex
+execute:
+  eval: false
+---
+
+## Using this reference
+
+Keep this beside the [student worksheet](week02_lab.html). The examples assume that its setup chunk has run. Combine these small calculations into your own cross-asset analysis.
+
+`week02_lab_helpers.R` uses base R. The worksheet also uses `dplyr`, `tidyr`, `readr`, `ggplot2` and `scales`. Quarto rendering needs `knitr` and `rmarkdown`. Install missing packages once, outside the worksheet:
+
+```{r}
+install.packages(c("dplyr", "tidyr", "readr", "ggplot2",
+                   "scales", "knitr", "rmarkdown"))
+```
+
+Input returns are **decimal log returns**, unless stated otherwise. The supplied data are already in EUR. The helpers reject missing or non-finite observations and constant samples; investigate the source rather than silently deleting observations.
+
+## Fit and investment outcomes
+
+```{r}
+x <- daily$log_return[daily$asset == "Equities"]
+fit <- normal_fit(x)
+normal_outcomes(m = fit["m"], s = fit["s"],
+                wealth = 100000, alpha = .99)
+```
+
+`normal_fit(x)` returns a named vector: `n`, `m` (sample mean) and `s` (sample SD, divisor $n-1$). Its period is the period of `x`.
+
+`normal_outcomes()` returns a one-row data frame:
+
+| Column | Meaning |
+|---|---|
+| `mean_simple` | Fitted $E[R]=\exp(m+s^2/2)-1$ |
+| `median_simple` | Fitted median $\exp(m)-1$ |
+| `loss_probability` | $P(R<0)=\Phi(-m/s)$ |
+| `lower_log_quantile` | The $1-\alpha$ log-return quantile |
+| `VaR_eur` | Loss VaR for the specified EUR wealth and confidence $\alpha$ |
+
+The helper does no annualisation. State the observation period in every table or figure. VaR can be negative for some parameter choices; do not silently force it to zero.
+
+For direct calculations, use `pnorm(q, mean, sd)` for the normal CDF and `qnorm(p, mean, sd)` for its quantile. Use `expm1(x)` for $e^x-1$ and `log1p(x)` for $\log(1+x)$; they are accurate near zero.
+
+```{r}
+daily |>
+  group_by(asset) |>
+  summarise(n = n(), m = mean(log_return), s = sd(log_return))
+```
+
+## Moments and graphical diagnostics
+
+```{r}
+return_moments(x)
+z <- (x - mean(x))/sd(x)
+qqnorm(z)
+abline(a = 0, b = 1, col = "red")
+```
+
+`return_moments()` returns `skewness`, `excess_kurtosis`, `JB` and `JB_p`. With $m_k=n^{-1}\sum_i(r_i-\bar r)^k$, it uses
+
+$$
+g_1=\frac{m_3}{m_2^{3/2}},\qquad
+g_2=\frac{m_4}{m_2^2}-3,\qquad
+JB=\frac n6\left(g_1^2+\frac{g_2^2}{4}\right).
+$$
+
+These central moments use divisor $n$ and no small-sample bias correction. Other packages can use different conventions. This does not change our choice of sample SD for fitting the normal model.
+
+For histograms, use `geom_histogram(aes(y = after_stat(density)))` before overlaying a density. For comparable QQ plots, standardise within each asset, use `stat_qq()` and add `geom_abline(intercept=0, slope=1)`. Do not standardise all assets together.
+
+## All three core tests through one interface
+
+```{r}
+daily_reference <- normal_mc_reference(n = length(x), B = 4999)
+test_result <- normal_tests(x, daily_reference)
+test_result[, c("n", "SW_p", "JB_p", "AD_p")]
+```
+
+Use the same interface for every asset and frequency. `normal_tests()` returns one data-frame row:
+
+| Fields | Test and calibration |
+|---|---|
+| `SW`, `SW_p` | Shapiro–Wilk from `stats::shapiro.test`; 3–5,000 observations |
+| `JB`, `JB_p` | Jarque–Bera with the asymptotic $\chi^2_2$ reference |
+| `AD`, `AD_p` | Anderson–Darling with a simulated fitted-normal reference |
+| `CvM`, `CvM_p` | Optional Cramér–von Mises with the same refitting procedure |
+| `KS`, `KS_refit_p` | Optional Kolmogorov–Smirnov with the same refitting procedure |
+| `n`, `B` | Number of observations and reference simulations |
+
+```{r}
+daily_tests <- daily |>
+  group_by(asset) |>
+  group_modify(~as_tibble(normal_tests(.x$log_return, daily_reference))) |>
+  ungroup()
+
+daily_tests |>
+  transmute(asset, n, SW = format_p(SW_p), JB = format_p(JB_p),
+            AD = format_p(AD_p, B = 4999))
+```
+
+Generate a **new reference for the monthly sample size**.
+
+### What is in the reference?
+
+`normal_mc_reference(n, B=4999, seed=109702+n)` simulates $B$ samples of size $n$ from $N(0,1)$. It re-estimates mean and sample SD in every sample, then stores KS, CvM and AD. It returns `n`, `B`, `seed` and a $B\times3$ matrix called `statistics`.
+
+Fitted-normal statistics are invariant to shifting and positive scaling. This permits one reference for assets with the same $n$ **and fitting convention**, and makes the calibration independent of the unknown normal parameters.
+
+For discrepancy $T$, the simulated p-value is
+
+$$
+\widehat p=\frac{1+\#\{T_b\ge T_{\rm observed}\}}{B+1}.
+$$
+
+At $B=4999$, the minimum is 0.0002. `format_p(p, B=4999)` marks that floor with an asterisk. It is not an estimate of zero. Near a reporting threshold, results can change with the seed. Away from zero, $\sqrt{\widehat p(1-\widehat p)/B}$ approximates Monte Carlo standard error.
+
+### Interpretation
+
+The reference assumes IID observations and stable normal parameters. Marginal tests cannot establish independence; dependence can invalidate calibration. Large p-values do not establish normality or rank usefulness. Monthly non-rejection also reflects the smaller sample size. The monthly JB p-value is an asymptotic approximation, not an exact finite-sample probability.
+
+## KS: the observed distance and its reference
+
+```{r}
+x_month <- monthly$log_return[monthly$asset == "Equities"]
+experiment <- ks_refit_experiment(x_month, B = 4999, seed = 209702)
+experiment$p_values
+
+experiment$draws |>
+  pivot_longer(everything(), names_to = "reference", values_to = "KS") |>
+  ggplot(aes(KS)) +
+  geom_histogram(bins = 35) +
+  geom_vline(xintercept = experiment$observed, colour = "red") +
+  facet_wrap(~reference, ncol = 1)
+```
+
+`experiment$observed` is the observed fitted-normal statistic. `draws` has `fixed` and `refitted` columns; each row uses the **same simulated sample** twice. `p_values` compares ordinary KS, fixed-parameter simulation and simulation with refitting.
+
+The helper repeats these steps:
+
+```{r}
+original_mean <- mean(x_month)
+original_sd <- sd(x_month)
+simulated <- rnorm(length(x_month), original_mean, original_sd)
+
+# Compare with the original CDF.
+normal_discrepancy(simulated, original_mean, original_sd)["KS"]
+
+# Refit: repeat the procedure used for the observed data.
+normal_discrepancy(simulated)["KS"]
+```
+
+The original estimates generate every bootstrap sample. Each sample then gets **its own estimates** for calculating its fitted discrepancy.
+
+The ordinary p-value from `ks.test(x, "pnorm", mean(x), sd(x))` omits the fitting step from its reference distribution. Its statistic is still the desired distance, but its p-value is not calibrated for the fitted-normal question. The fixed-parameter simulation reproduces that ordinary KS reference within simulation error. Both deliberately demonstrate the wrong calibration here; the refitted calculation answers the appropriate question.
+
+`normal_discrepancy(x, m=mean(x), s=sd(x))` returns named `KS`, `CvM` and `AD` **statistics**, not p-values.
+
+## Merton jump scenarios
+
+```{r}
+model <- jump_model(mu = .08, sigma = .14, lambda = 2,
+                    jump_mean = -.04, jump_sd = .06, h = 1/252)
+r_jump <- simulate_jump_returns(n = 100000, model, seed = 209706)
+set.seed(209716)
+r_normal <- rnorm(100000, model$log_mean, sqrt(model$log_variance))
+```
+
+`jump_model()` returns the parameters, corrected drift `a`, `log_mean`, `log_variance` and `expected_gross`.
+
+| Parameter | Meaning and units |
+|---|---|
+| `mu` | Annual wealth-growth exponent: $E[e^{r_h}]=e^{\mu h}$ |
+| `sigma` | Diffusion volatility per square-root year |
+| `lambda` | Expected jumps per year |
+| `jump_mean` | Mean log change per jump |
+| `jump_sd` | SD of log change per jump |
+| `h` | Horizon in years; $1/252$ is the illustrative daily step |
+
+The construction draws a Poisson count and independent normal diffusion and jump terms. Conditional on count $k$, the jump sum is normal with mean $km_J$ and variance $ks_J^2$. All exponential moments are finite. These parameters are illustrative, **not estimated from the asset histories**.
+
+### Check growth and extreme quantiles
+
+```{r}
+gross <- exp(r_jump)
+c(simulated = mean(gross), model = model$expected_gross,
+  MC_standard_error = sd(gross)/sqrt(length(gross)))
+
+p <- c(.001, .999)
+simulated_q <- quantile(r_jump, p, type = 7)
+model_q <- jump_quantile(p, model)
+normal_q <- qnorm(p, model$log_mean, sqrt(model$log_variance))
+expm1(model_q)       # Simple-return quantiles.
+100000*exp(model_q)  # Wealth quantiles for initial EUR 100,000.
+```
+
+`jump_cdf(q, model)` evaluates the normal/Poisson mixture, retaining all but at most $10^{-12}$ Poisson probability. `jump_quantile(p, model)` numerically inverts it. These calculations check simulations, whose distant tails contain few draws.
+
+Use `jump_model(lambda=4)` to raise jump frequency. This recalculates drift to keep `mu` and expected wealth growth fixed. Recompute the normal comparator: its log moments change. Matching two log moments does not generally match expected wealth or distant quantiles.
+
+## Sources
+
+- [R: Shapiro–Wilk test](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/shapiro.test.html)
+- [R: KS tests and the fitted-parameter restriction](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/ks.test.html)
+- [Monte Carlo goodness-of-fit with refitting: documented algorithm](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.goodness_of_fit.html) — explains the method; this lab uses R.
+- [Merton (1976): Option pricing when underlying stock returns are discontinuous](https://doi.org/10.1016/0304-405X(76)90022-2)
