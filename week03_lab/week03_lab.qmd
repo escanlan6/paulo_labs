@@ -139,7 +139,31 @@ Use these three outcomes and predictions:
 
 ```{r}
 # Create the vectors and complete the error table.
+actual <- c(10, 20, 30)
+predicted <- c(12, 18, 24)
 
+errors <- tibble(
+  observation = 1:3,
+  actual = actual,
+  predicted = predicted,
+  error = actual - predicted,
+  abs_error = abs(actual - predicted),
+  squared_error = (actual - predicted)^2
+)
+
+mae_direct <- mean(errors$abs_error)
+rmse_direct <- sqrt(mean(errors$squared_error))
+
+mae_check <- mae(actual, predicted)
+rmse_check <- rmse(actual, predicted)
+
+errors
+mae_direct
+rmse_direct
+mae_check
+rmse_check
+
+# If the target is measured in volatility points, both MAE and RMSE are in volatility points.
 ```
 
 **Checkpoint:** MAE is 3.33 and RMSE is 3.83, to two decimal places.
@@ -157,7 +181,20 @@ Check your direct calculation with `r2_against()`.
 
 ```{r}
 # Construct the mean baseline and calculate R-squared.
+mean_actual <- mean(actual)
+mean_baseline <- rep(mean_actual, length(actual))
 
+baseline <- rep(mean(actual), length(actual))
+model_squared_error <- sum((actual - predicted)^2)
+mean_baseline_squared_error <- sum((actual - baseline)^2)
+r2_direct <- 1 - model_squared_error / mean_baseline_squared_error
+r2_check <- r2_against(actual, predicted, baseline)
+
+model_squared_error
+mean_baseline_squared_error
+r2_direct
+r2_match <- (abs(r2_direct - r2_check) < 1e-12)
+r2_match
 ```
 
 **Checkpoint:** the model's squared error is 44, the mean baseline's squared error is 200, and $R^2=0.78$.
@@ -178,7 +215,23 @@ For daily decimal returns `c(-0.01, 0, 0.01)`:
 
 ```{r}
 # Calculate daily and annualised sample volatility.
+returns <- c(-0.01, 0, 0.01)
 
+daily_sd <- sd(returns)
+annual_sd <- daily_sd * sqrt(252)
+
+daily_vol_pct <- 100 * daily_sd
+annual_vol_pct <- 100 * annual_sd
+
+c(
+  daily_sample_sd = daily_sd,
+  annualised_sd = annual_sd,
+  daily_vol_pct = daily_vol_pct,
+  annual_vol_pct = annual_vol_pct
+)
+
+# Neither daily nor annualised volatility predicts the sign of the next return.
+# Volatility is a dispersion measure, not a directional forecast.
 ```
 
 **Checkpoint:** daily sample volatility is 1% and the annualised value is approximately 15.9%.
@@ -203,7 +256,65 @@ One row of `finance` has information from the end of `month` and a target in `ta
 
 ```{r}
 # Audit dates, roles and missing values.
+finance_summary <- finance |>
+  group_by(sample_role) |>
+  summarise(
+    first_target_month = min(target_month),
+    last_target_month = max(target_month),
+    n_rows = n(),
+    .groups = "drop"
+  )
 
+month_order_check <- finance |>
+  summarise(all_month_before_target = all(month < target_month, na.rm = TRUE))
+
+train_end <- finance |>
+  filter(sample_role == "train") |>
+  summarise(max_target_month = max(target_month))
+
+test_start <- finance |>
+  filter(sample_role == "test") |>
+  summarise(min_target_month = min(target_month))
+
+training_boundary_check <- finance |>
+  filter(sample_role == "train") |>
+  summarise(
+    training_ends_dec_2009 = max(target_month) == as.Date("2009-12-01")
+  )
+
+test_boundary_check <- finance |>
+  filter(sample_role == "test") |>
+  summarise(
+    test_starts_jan_2010 = min(target_month) == as.Date("2010-01-01")
+  )
+
+missing_check <- finance |>
+  summarise(
+    missing_target_month = sum(is.na(target_month)),
+    missing_month = sum(is.na(month)),
+    missing_realised_vol = sum(is.na(realised_vol)),
+    missing_vix_end = sum(is.na(vix_end)),
+    missing_next_realised_vol = sum(is.na(next_realised_vol))
+  )
+
+finance_summary
+month_order_check
+train_end
+test_start
+training_boundary_check
+test_boundary_check
+missing_check
+
+stopifnot(
+  isTRUE(month_order_check$all_month_before_target),
+  isTRUE(training_boundary_check$training_ends_dec_2009),
+  isTRUE(test_boundary_check$test_starts_jan_2010),
+  missing_check$missing_target_month == 0,
+  missing_check$missing_month == 0,
+  missing_check$missing_realised_vol == 0,
+  missing_check$missing_vix_end == 0,
+  missing_check$missing_next_realised_vol == 0
+)
 ```
 
 <details class="concept">
@@ -222,7 +333,34 @@ Create `finance_train` and `finance_test` from `sample_role`.
 
 ```{r}
 # Split, fit and add three prediction columns to finance_test.
+finance_train <- finance |>
+  filter(sample_role == "train")
 
+finance_test <- finance |>
+  filter(sample_role == "test")
+
+historical_mean <- mean(finance_train$next_realised_vol)
+
+finance_test <- finance_test |>
+  mutate(
+    historical_mean_pred = historical_mean,
+    persistence_pred = realised_vol,
+    vix_model = NA_real_
+  )
+
+vix_fit <- lm(next_realised_vol ~ vix_end, data = finance_train)
+
+finance_test <- finance_test |>
+  mutate(
+    vix_model = as.numeric(predict(vix_fit, newdata = finance_test))
+  )
+
+coef(vix_fit)
+summary(vix_fit)$r.squared
+
+finance_test |>
+  select(target_month, realised_vol, historical_mean_pred, persistence_pred, vix_model) |>
+  head()
 ```
 
 ### 2C. Evaluate unseen months
@@ -231,7 +369,23 @@ Use `prediction_metrics()` or calculate each metric directly. The historical mea
 
 ```{r}
 # Build a three-row table with test MAE, RMSE and R2_test.
+metrics_table <- prediction_metrics(
+  actual = finance_test$next_realised_vol,
+  predictions = list(
+    historical_mean = rep(mean(finance_train$next_realised_vol), nrow(finance_test)),
+    persistence = finance_test$realised_vol,
+    vix_model = finance_test$vix_model
+  ),
+  baseline_name = "historical_mean"
+) |>
+  mutate(
+    MAE = MAE,
+    RMSE = RMSE,
+    R2_test = R2_test,
+    .keep = "all"
+  )
 
+metrics_table
 ```
 
 **Checkpoint for the fixed model:** the VIX model has MAE about 4.43, RMSE about 7.36 and test $R^2$ about 39.2%. State MAE and RMSE in annualised volatility points.
@@ -242,15 +396,44 @@ Make a time-series plot of actual test volatility and all three predictions. Use
 
 ```{r}
 # Reshape the test predictions and make the plot.
+plot_data <- finance_test |>
+  select(target_month, realised_vol, historical_mean_pred, persistence_pred, vix_model) |>
+  pivot_longer(
+    cols = c(realised_vol, historical_mean_pred, persistence_pred, vix_model),
+    names_to = "series",
+    values_to = "volatility"
+  ) |>
+  mutate(
+    series = recode(
+      series,
+      realised_vol = "Actual",
+      historical_mean_pred = "Historical mean",
+      persistence_pred = "Persistence",
+      vix_model = "VIX model"
+    )
+  )
 
+ggplot(plot_data, aes(x = target_month, y = volatility, colour = series)) +
+  geom_line(linewidth = 0.8) +
+  labs(
+    x = "Target month",
+    y = "Annualised volatility (% points)",
+    colour = "Series",
+    title = "Test-period realised volatility and forecasts"
+  ) +
+  theme_minimal(base_size = 12)
 ```
 
 **Interpretation:** write four sentences covering:
 
 - which model has the smallest MAE;
+- - Answer: The VIX model has the smallest MAE, about 4.43 annualised volatility points, versus 5.80 for persistence and 6.40 for the historical mean.
 - which has the smallest RMSE;
+- - Answer: The VIX model also has the smallest RMSE, about 7.36 annualised volatility points, compared with 9.64 for persistence and 9.44 for the historical mean.
 - what the VIX model's test $R^2$ means;
+- - Answer: Its test $R^2$ is about 0.392, meaning it explains about 39.2% of the variance in next-month realised volatility relative to the historical-mean baseline on the held-out test set.
 - why this result does not yet imply a profitable trading strategy.
+- - Answer: Forecast accuracy alone does not account for transaction costs, execution slippage, position sizing, or the economic value of the forecast in a trading rule; a more accurate volatility forecast is not automatically a profitable strategy.
 
 ## Task 3: Expanding-window forecasts
 
@@ -266,10 +449,29 @@ Read the function in `week03_lab_helpers.R` before running it. Explain how this 
 ```r
 training <- finance[finance$target_month < finance$target_month[j], ]
 ```
+This line prevents leakage because it ensures each forecast is trained only on observations whose target_month is earlier than the current month being predicted, so no future information is used in the model fit.
 
 ```{r}
 # Run the expanding helper and calculate its three-row metric table.
+expanding_forecasts <- expanding_volatility_forecasts(finance)
 
+expanding_metrics <- prediction_metrics(
+  actual = expanding_forecasts$actual,
+  predictions = list(
+    historical_mean = expanding_forecasts$historical_mean,
+    persistence = expanding_forecasts$persistence,
+    vix_model = expanding_forecasts$vix_model
+  ),
+  baseline_name = "historical_mean"
+) |>
+  mutate(
+    MAE = MAE,
+    RMSE = RMSE,
+    R2_test = R2_test,
+    .keep = "all"
+  )
+
+expanding_metrics
 ```
 
 **Checkpoint:** the expanding VIX model has MAE about 4.44, RMSE about 7.40 and test $R^2$ about 38.3%.
@@ -278,7 +480,43 @@ Identify the five VIX-model predictions with the largest absolute errors. Compar
 
 ```{r}
 # Create and display the five-row largest-error table.
+top5_idx <- order(
+  abs(expanding_forecasts$actual - expanding_forecasts$vix_model),
+  decreasing = TRUE
+)[1:5]
 
+largest_error_table <- expanding_forecasts[top5_idx, c("target_month", "actual", "vix_model")]
+
+largest_error_table$error <- largest_error_table$actual - largest_error_table$vix_model
+largest_error_table$abs_error <- abs(largest_error_table$error)
+
+largest_error_table <- largest_error_table[
+  order(-largest_error_table$abs_error),
+  c("target_month", "actual", "vix_model", "error", "abs_error")
+]
+
+largest_error_table
+
+# Compare the effect of these five large misses on MAE and RMSE.
+mae_all <- mae(expanding_forecasts$actual, expanding_forecasts$vix_model)
+rmse_all <- rmse(expanding_forecasts$actual, expanding_forecasts$vix_model)
+
+mae_without_top5 <- mae(
+  expanding_forecasts$actual[-top5_idx],
+  expanding_forecasts$vix_model[-top5_idx]
+)
+rmse_without_top5 <- rmse(
+  expanding_forecasts$actual[-top5_idx],
+  expanding_forecasts$vix_model[-top5_idx]
+)
+
+comparison <- data.frame(
+  metric = c("MAE", "RMSE"),
+  all_rows = c(mae_all, rmse_all),
+  without_top5 = c(mae_without_top5, rmse_without_top5)
+)
+
+comparison
 ```
 
 ::: {.callout-tip title="Interpretation check"}
