@@ -73,15 +73,36 @@ library(readr)
 library(ggplot2)
 library(scales)
 
-lab_candidates <- c(".", "..", "week02/lab")
-lab_dir <- lab_candidates[
-  file.exists(file.path(lab_candidates, "week02_lab_helpers.R"))
-][1]
+find_lab_dir <- function(start = ".") {
+  start <- normalizePath(start, winslash = "/", mustWork = FALSE)
+  current <- start
+  while (TRUE) {
+    candidates <- c(
+      current,
+      file.path(current, "week02_lab"),
+      file.path(current, "week02", "lab"),
+      file.path(current, ".."),
+      file.path(current, "..", "week02_lab")
+    )
+    for (p in candidates) {
+      if (dir.exists(p) && file.exists(file.path(p, "week02_lab_helpers.R"))) {
+        return(normalizePath(p, winslash = "/"))
+      }
+    }
+    parent <- dirname(current)
+    if (parent == current) break
+    current <- parent
+  }
+  return(NA_character_)
+}
+
+lab_dir <- find_lab_dir()
 stopifnot(!is.na(lab_dir))
 source(file.path(lab_dir, "week02_lab_helpers.R"))
 
 data_candidates <- c(file.path(lab_dir, "data"),
-                     file.path(lab_dir, "../data/frozen"))
+                     file.path(lab_dir, "../data/frozen"),
+                     file.path(lab_dir, "..", "data"))
 data_dir <- data_candidates[
   file.exists(file.path(data_candidates, "returns_daily_eur.csv"))
 ][1]

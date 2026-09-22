@@ -639,6 +639,56 @@ $$
 # Produce one row per asset with annualised simple and log excess means,
 # annualised simple and log volatility, and final discounted wealth.
 
+# Use the common dates with identical non-missing observation counts
+n_obs <- sum(!is.na(common_panel$R_global_e))
+T_years <- as.numeric((max(common_panel$date, na.rm = TRUE) - min(common_panel$date, na.rm = TRUE)) / 365.25)
+m <- n_obs / T_years
+
+annual_excess_summary <- tibble(
+  asset = c("Global equities", "Euro government bonds", "Physical gold"),
+  simple_excess_mean = c(
+    mean(common_panel$R_global_e, na.rm = TRUE),
+    mean(common_panel$R_bonds_e, na.rm = TRUE),
+    mean(common_panel$R_gold_e, na.rm = TRUE)
+  ),
+  log_excess_mean = c(
+    mean(common_panel$r_global_e, na.rm = TRUE),
+    mean(common_panel$r_bonds_e, na.rm = TRUE),
+    mean(common_panel$r_gold_e, na.rm = TRUE)
+  ),
+  simple_excess_vol = c(
+    sd(common_panel$R_global_e, na.rm = TRUE),
+    sd(common_panel$R_bonds_e, na.rm = TRUE),
+    sd(common_panel$R_gold_e, na.rm = TRUE)
+  ),
+  log_excess_vol = c(
+    sd(common_panel$r_global_e, na.rm = TRUE),
+    sd(common_panel$r_bonds_e, na.rm = TRUE),
+    sd(common_panel$r_gold_e, na.rm = TRUE)
+  ),
+  final_discounted_wealth = c(
+    prod(common_panel$G_global_e, na.rm = TRUE),
+    prod(common_panel$G_bonds_e, na.rm = TRUE),
+    prod(common_panel$G_gold_e, na.rm = TRUE)
+  )
+) |>
+  mutate(
+    annual_simple_excess_mean_pct = 100 * m * simple_excess_mean,
+    annual_log_excess_mean_pct = 100 * m * log_excess_mean,
+    annual_simple_excess_vol_pct = 100 * sqrt(m) * simple_excess_vol,
+    annual_log_excess_vol_pct = 100 * sqrt(m) * log_excess_vol,
+    final_discounted_wealth = final_discounted_wealth
+  ) |>
+  select(
+    asset,
+    annual_simple_excess_mean_pct,
+    annual_log_excess_mean_pct,
+    annual_simple_excess_vol_pct,
+    annual_log_excess_vol_pct,
+    final_discounted_wealth
+  )
+
+annual_excess_summary
 ```
 
 Your table should have clear percentage labels and must state whether each quantity uses simple or log returns.
@@ -673,6 +723,47 @@ For this first calculation, assume the portfolio is restored to its target weigh
 ```{r}
 # Construct the daily-rebalanced portfolio and its nominal and excess returns.
 
+w <- c(Equities = 0.60, Bonds = 0.30, Gold = 0.10)
+
+portfolio_returns <- common_panel |>
+  transmute(
+    date,
+    R_equity = R_global_e,
+    R_bond = R_bonds_e,
+    R_gold = R_gold_e,
+    # beginning-of-period weights are constant target weights; daily rebalancing restores them
+    R_portfolio = 0.60 * lag(R_equity) + 0.30 * lag(R_bond) + 0.10 * lag(R_gold),
+    r_portfolio = log(1 + R_portfolio),
+    # excess return is gross return divided by safe-account gross return
+    G_portfolio = 1 + R_portfolio,
+    G_portfolio_e = G_portfolio / G_f,
+    R_portfolio_e = G_portfolio_e - 1,
+    r_portfolio_e = log(G_portfolio_e)
+  ) |>
+  filter(!is.na(R_portfolio))
+
+portfolio_returns
+
+# Annualised portfolio statistics using the same logic as Task 5
+n_portfolio <- nrow(portfolio_returns)
+T_years_portfolio <- as.numeric((max(portfolio_returns$date) - min(portfolio_returns$date)) / 365.25)
+m_portfolio <- n_portfolio / T_years_portfolio
+
+portfolio_summary <- tibble(
+  asset = "Portfolio",
+  annual_simple_excess_mean_pct = 100 * m_portfolio * mean(portfolio_returns$R_portfolio_e),
+  annual_log_excess_mean_pct = 100 * m_portfolio * mean(portfolio_returns$r_portfolio_e),
+  annual_simple_excess_vol_pct = 100 * sqrt(m_portfolio) * sd(portfolio_returns$R_portfolio_e),
+  annual_log_excess_vol_pct = 100 * sqrt(m_portfolio) * sd(portfolio_returns$r_portfolio_e),
+  final_discounted_wealth = prod(portfolio_returns$G_portfolio_e, na.rm = TRUE)
+)
+
+# Append portfolio row to the existing comparison table from Task 5
+comparison_table <- annual_excess_summary |>
+  mutate(asset = as.character(asset)) |>
+  bind_rows(portfolio_summary)
+
+comparison_table
 ```
 
 Calculate the same annualised statistics as in Task 5 and append the portfolio to the comparison table.
@@ -706,11 +797,65 @@ $$
 ```{r}
 # Calculate and reconcile the two portfolio-volatility estimates.
 
+asset_returns <- common_panel |>
+  select(date, R_global_e, R_bonds_e, R_gold_e) |>
+  rename(
+    Equities = R_global_e,
+    Bonds = R_bonds_e,
+    Gold = R_gold_e
+  ) |>
+  filter(!is.na(Equities), !is.na(Bonds), !is.na(Gold))
+
+returns_matrix <- as.matrix(asset_returns |> select(Equities, Bonds, Gold))
+Sigma <- cov(returns_matrix)
+corr_matrix <- cor(returns_matrix)
+
+w_vec <- c(0.60, 0.30, 0.10)
+portfolio_vol_direct <- sd(portfolio_returns$R_portfolio_e, na.rm = TRUE)
+portfolio_vol_formula <- sqrt(t(w_vec) %*% Sigma %*% w_vec)
+weighted_avg_volatility <- sum(w_vec * sqrt(diag(Sigma)))
+
+# Display the matrices and the reconciliation
+corr_matrix
+Sigma
+
+reconciliation <- tibble(
+  metric = c(
+    "portfolio_vol_direct",
+    "portfolio_vol_formula",
+    "weighted_avg_standalone_vol"
+  ),
+  value = c(
+    portfolio_vol_direct,
+    as.numeric(portfolio_vol_formula),
+    weighted_avg_volatility
+  )
+)
+
+reconciliation
 ```
 
 ```{r}
 # Create one informative diversification chart.
 
+diversification_plot <- asset_returns |>
+  pivot_longer(c(Equities, Bonds, Gold), names_to = "asset", values_to = "return") |>
+  bind_rows(
+    portfolio_returns |>
+      transmute(date, asset = "Portfolio", return = R_portfolio_e)
+  ) |>
+  ggplot(aes(x = return, colour = asset, fill = asset)) +
+  geom_density(alpha = 0.15, linewidth = 0.7) +
+  labs(
+    x = "Daily excess return",
+    y = "Density",
+    colour = "Series",
+    fill = "Series",
+    title = "Diversification: asset return densities versus the daily-rebalanced portfolio"
+  ) +
+  theme_minimal(base_size = 12)
+
+diversification_plot
 ```
 
 **Interpretation.** Explain why
@@ -759,6 +904,89 @@ $$
 # Derive the January pre-trade holdings, define the budget residual,
 # solve for post-trade wealth with uniroot(), and build a reconciliation table.
 
+# 60/30/10 weights
+w_target <- c(
+  global_equity_eur = 0.60,
+  euro_government_bonds = 0.30,
+  physical_gold_eur = 0.10
+)
+
+# Use the first and last common panel dates in January 2025
+jan_dates <- common_panel |>
+  filter(date >= as.Date("2025-01-01"), date <= as.Date("2025-01-31")) |>
+  arrange(date)
+
+first_jan <- jan_dates$date[1]
+last_jan <- jan_dates$date[nrow(jan_dates)]
+
+# Pre-trade asset values after allowing each holding to grow from the first common return date to the last common date in January
+start_values <- 100000 * w_target
+
+v_minus <- c(
+  global_equity_eur = start_values["global_equity_eur"] * (
+    last_jan_level <- jan_dates$global_equity_eur[nrow(jan_dates)] / jan_dates$global_equity_eur[1]
+  ),
+  euro_government_bonds = start_values["euro_government_bonds"] * (
+    jan_dates$euro_government_bonds[nrow(jan_dates)] / jan_dates$euro_government_bonds[1]
+  ),
+  physical_gold_eur = start_values["physical_gold_eur"] * (
+    jan_dates$physical_gold_eur[nrow(jan_dates)] / jan_dates$physical_gold_eur[1]
+  )
+)
+
+V_minus <- sum(v_minus)
+
+# Half-spreads from the approved assumptions file
+s <- transaction_cost_assumptions |>
+  filter(ticker %in% c("VWRL.AS", "IEGA.AS", "PHAU.L")) |>
+  mutate(
+    asset_name = case_when(
+      ticker == "VWRL.AS" ~ "global_equity_eur",
+      ticker == "IEGA.AS" ~ "euro_government_bonds",
+      ticker == "PHAU.L" ~ "physical_gold_eur"
+    )
+  ) |>
+  arrange(match(asset_name, names(w_target))) |>
+  pull(half_spread_rate)
+
+names(s) <- names(w_target)
+
+# Solve V^- = V^+ + sum_i s_i * |w_i * V^+ - v_i^-|
+residual <- function(V_plus) {
+  sum(w_target * V_plus) + sum(s * abs(w_target * V_plus - v_minus)) - V_minus
+}
+
+V_plus <- uniroot(residual, interval = c(1e-8, V_minus * 1.5))$root
+
+delta_i <- w_target * V_plus - v_minus
+cost_i <- s * abs(delta_i)
+post_trade_value <- w_target * V_plus
+post_trade_weight <- post_trade_value / V_plus
+
+reconciliation_table <- tibble(
+  asset = names(w_target),
+  pre_trade_value = v_minus,
+  signed_trade = delta_i,
+  half_spread = s,
+  transaction_cost = cost_i,
+  post_trade_value = post_trade_value,
+  post_trade_weight = post_trade_weight
+)
+
+reconciliation_table
+
+# Checks
+sum(v_minus)
+V_minus
+sum(post_trade_value) + sum(cost_i)
+post_trade_value / V_plus
+
+# Reconcile within a small numerical tolerance
+stopifnot(
+  abs(sum(v_minus) - V_minus) < 1e-6,
+  abs(V_minus - (sum(post_trade_value) + sum(cost_i))) < 1e-6,
+  max(abs(post_trade_value / V_plus - w_target)) < 1e-10
+)
 ```
 
 Your table must report, for every asset:
@@ -793,11 +1021,28 @@ Do not calculate costs from trades based on $w_iV^-$ and call the result exact. 
 Write four to six sentences answering:
 
 1. What changed when distributions were included?
+
+Answer: Including distributions raised the total-return series above the price-only series and increased the realised excess-return mean. The difference is most visible in the equity series, where the cash distributions add to wealth and therefore to the compound growth rate.
+
 2. What changed when the USD gold investment was measured in EUR?
+
+Answer: Converting the USD gold series into EUR made it comparable with the EUR-denominated equity and bond assets. The EUR conversion also makes the portfolio weights and excess-return calculations economically consistent for a euro investor.
+
 3. Which asset had the highest annualised excess volatility?
+
+Answer: Global equities had the highest annualised excess volatility, at about 16.5% on the simple-excess basis and 16.6% on the log-excess basis. The euro government bond series was much lower, and gold was close to equities but slightly below.
+
 4. How much did diversification reduce portfolio volatility relative to the weighted average of standalone volatilities?
+
+Answer: Diversification reduced portfolio volatility from a weighted average of standalone volatilities of 0.00848 to a portfolio volatility of 0.00663. That is a reduction of about 21.8%.
+
 5. How much wealth was lost to the exact January rebalance costs?
+
+Answer: The exact rebalance costs consumed about €1.22 from the €100,000 allocation. This is the cost of the exact, self-financing trade that matches the 60/30/10 targets after accounting for spreads.
+
 6. Which assumptions limit the interpretation?
+
+Answer: The results are limited by the frozen sample period, the daily-rebalanced benchmark assumption, and the illustrative half-spread assumptions used in the transaction-cost calculation. The analysis is therefore informative about the model setup rather than a claim about realised future trading outcomes.
 
 AI may help edit your prose, but every numerical statement must come from code that you have checked.
 
