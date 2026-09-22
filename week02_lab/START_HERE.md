@@ -20,7 +20,7 @@ offline, including equations.
 To execute the worksheet, use R 4.1 or later, RStudio and Quarto. Install the
 following R packages once if they are missing:
 
-```r
+```{r}
 install.packages(c("dplyr", "tidyr", "readr", "ggplot2",
                    "scales", "knitr", "rmarkdown"))
 ```
