@@ -1,0 +1,252 @@
+---
+title: "Week 3 R reference"
+subtitle: "Prediction metrics, dated forecasts and policy risk groups"
+author: "MTH1097 Financial and Actuarial Data Analysis"
+format:
+  html:
+    theme: cosmo
+    css: lab.css
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    html-math-method: katex
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Purpose
+
+This reference gives the R syntax and assumptions used in the Week 3 lab. It does not replace the worksheet prompts or their interpretations.
+
+## Prediction errors
+
+For actual outcomes `actual` and predictions `predicted`, the signed error convention is
+
+$$
+e_i=y_i-\widehat y_i.
+$$
+
+```{r}
+actual <- c(10, 20, 30)
+predicted <- c(12, 18, 24)
+
+error <- actual - predicted
+absolute_error <- abs(error)
+squared_error <- error^2
+
+data.frame(actual, predicted, error, absolute_error, squared_error)
+```
+
+A positive error means that the outcome exceeded the prediction.
+
+## MAE and RMSE
+
+```{r}
+mean(absolute_error)
+sqrt(mean(squared_error))
+```
+
+The helper file defines checked versions:
+
+```r
+mae(actual, predicted)
+rmse(actual, predicted)
+```
+
+MAE and RMSE have the target's units. RMSE gives a large miss more influence because it squares errors before averaging.
+
+## R-squared
+
+### Training R-squared
+
+For a least-squares fit with an intercept,
+
+$$
+R^2=1-\frac{\sum_i(y_i-\widehat y_i)^2}
+{\sum_i(y_i-\bar y)^2}.
+$$
+
+R reports this value in `summary(model)$r.squared`.
+
+```r
+model <- lm(y ~ x, data = training)
+summary(model)$r.squared
+```
+
+It measures the fraction of training-sample variation around the training mean accounted for by the fitted regression. It does not estimate future performance by itself.
+
+### Test R-squared
+
+For test outcomes, Week 3 uses a stated baseline prediction:
+
+$$
+R^2_{test}=1-
+\frac{\sum_{i\in test}(y_i-\widehat y_i)^2}
+{\sum_{i\in test}(y_i-\widehat y_{0i})^2}.
+$$
+
+```r
+r2_against(actual, predicted, baseline)
+```
+
+A negative result means the model has more total squared test error than the baseline. Test $R^2$ is a baseline-relative error reduction, rather than an in-sample variance decomposition.
+
+## Several prediction columns
+
+`prediction_metrics()` takes a named list of prediction vectors.
+
+```r
+prediction_metrics(
+  actual = test$actual,
+  predictions = list(
+    historical_mean = test$historical_mean,
+    persistence = test$persistence,
+    vix_model = test$vix_model
+  ),
+  baseline_name = "historical_mean"
+)
+```
+
+The baseline receives test $R^2=0$ by construction.
+
+## Sample and annualised volatility
+
+R's `sd()` uses the sample denominator $n-1$.
+
+```{r}
+daily_returns <- c(-0.01, 0, 0.01)
+daily_volatility <- sd(daily_returns)
+annualised_volatility <- sqrt(252) * daily_volatility
+
+100 * c(daily = daily_volatility, annualised = annualised_volatility)
+```
+
+The result is in percentage points after multiplying decimal returns by 100. The square-root-of-time conversion assumes stable daily variance and sufficiently weak dependence.
+
+## A chronological finance split
+
+```r
+finance_train <- finance |>
+  filter(sample_role == "train")
+finance_test <- finance |>
+  filter(sample_role == "test")
+```
+
+The VIX fit uses only training rows:
+
+```r
+vix_fit <- lm(next_realised_vol ~ vix_end, data = finance_train)
+finance_test$vix_model <- predict(vix_fit, newdata = finance_test)
+```
+
+The baselines are
+
+```r
+finance_test$historical_mean <- mean(finance_train$next_realised_vol)
+finance_test$persistence <- finance_test$realised_vol
+```
+
+Never calculate the baseline mean from the combined training and test outcomes.
+
+## Expanding-window finance forecasts
+
+```r
+finance_expanding <- expanding_volatility_forecasts(finance)
+```
+
+Open `week03_lab_helpers.R` and read the function. For each test target month, it selects rows whose target was already known, fits a new linear model and makes one prediction.
+
+Useful audit:
+
+```r
+stopifnot(
+  all(finance_expanding$origin_month < finance_expanding$target_month),
+  all(finance_expanding$training_rows >= 24)
+)
+```
+
+## An exposure-weighted frequency model
+
+The observed frequency is
+
+```r
+motor$claim_frequency <- motor$ClaimNb / motor$Exposure
+```
+
+The baseline annual rate uses total claims divided by total exposure:
+
+```r
+portfolio_rate <- with(
+  motor_train,
+  sum(ClaimNb) / sum(Exposure)
+)
+```
+
+The first model is weighted least squares:
+
+```r
+frequency_fit <- lm(
+  claim_frequency ~ BonusMalus + DrivAge + I(DrivAge^2) + Area,
+  data = motor_train,
+  weights = Exposure
+)
+```
+
+`I(DrivAge^2)` asks R to square age numerically. Without `I()`, the formula operator `^` has a special model-formula meaning.
+
+Convert annual frequencies to expected counts before comparison with `ClaimNb`:
+
+```r
+motor_test$predicted_frequency <- predict(frequency_fit, newdata = motor_test)
+motor_test$predicted_count <-
+  motor_test$Exposure * motor_test$predicted_frequency
+motor_test$baseline_count <-
+  motor_test$Exposure * portfolio_rate
+```
+
+Do not silently replace a negative linear prediction with zero. Count it and explain why it reveals a model limitation.
+
+## Held-out risk groups
+
+```r
+groups <- risk_group_summary(
+  motor_test,
+  predicted_frequency = motor_test$predicted_frequency,
+  groups = 10
+)
+```
+
+Each observed group rate equals group claims divided by group exposure. It is not the ordinary mean of individual observed frequencies.
+
+```r
+groups$observed_frequency == groups$claims / groups$exposure
+```
+
+## A readable long-format plot
+
+```r
+groups |>
+  select(risk_group, mean_predicted_frequency, observed_frequency) |>
+  pivot_longer(-risk_group, names_to = "series", values_to = "frequency") |>
+  ggplot(aes(risk_group, frequency, colour = series, shape = series)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(x = "Predicted-risk group", y = "Claims per exposure-year",
+       colour = NULL, shape = NULL) +
+  theme_minimal()
+```
+
+## Interpretation checklist
+
+Before accepting a conclusion, identify:
+
+- the target and its units;
+- the information available at prediction time;
+- the baseline;
+- the holdout design;
+- the loss and what it emphasises;
+- the conclusion supported by the observed test period;
+- the stronger causal, profit or policy claim that remains unsupported.

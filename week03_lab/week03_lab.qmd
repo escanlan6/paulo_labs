@@ -1,0 +1,405 @@
+---
+title: "Week 3 laboratory"
+subtitle: "Prediction, unseen data and forecast metrics"
+author: "MTH1097 Financial and Actuarial Data Analysis"
+format:
+  html:
+    theme: cosmo
+    css: lab.css
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    embed-resources: true
+    html-math-method: katex
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Purpose
+
+**How can we decide whether a model predicts an unseen financial or insurance outcome better than a simple baseline?**
+
+This is a two-hour formative laboratory. Nothing is submitted for marks. You will calculate volatility, MAE, RMSE and $R^2$, then use them in two prediction settings:
+
+1. next-month S&P 500 realised volatility;
+2. claim frequency for a held-out motor policy.
+
+The finance data use a chronological split. The insurance data use a frozen random policy split. In both cases, the test outcome plays no part in estimating its prediction.
+
+## Working with AI
+
+Use the same checked workflow as in Weeks 1 and 2:
+
+1. state the prediction target, baseline and information date;
+2. request one small piece of R code;
+3. read and explain it before running it;
+4. check units and at least one numerical identity;
+5. write the interpretation yourself.
+
+Ask AI to simplify code you cannot explain. Never accept a model because its training $R^2$ is large or because a function ran without an error.
+
+## Timing and outputs
+
+| Minutes | Task | Keep in your worksheet |
+|---|---|---|
+| 0-20 | Define the metrics and volatility | Worked error table and volatility calculation |
+| 20-65 | Fixed-split volatility prediction | Test metric table and dated forecast plot |
+| 65-80 | Expanding-window evaluation | Revised metrics and largest-error table |
+| 80-110 | Motor claim frequency | Policy metrics and risk-group plot |
+| 110-120 | Compare the designs | Completed synthesis table and conclusion |
+
+Complete the core tasks before attempting extensions.
+
+## Setup
+
+Extract the entire student package into a writable folder. Run this chunk first.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(scales)
+
+find_lab_dir <- function(start = ".") {
+  start <- normalizePath(start, winslash = "/", mustWork = FALSE)
+  current <- start
+  while (TRUE) {
+    candidates <- c(
+      current,
+      file.path(current, "week03_lab"),
+      file.path(current, "week03", "lab"),
+      file.path(current, ".."),
+      file.path(current, "..", "week03_lab")
+    )
+    for (p in candidates) {
+      if (dir.exists(p) && file.exists(file.path(p, "week03_lab_helpers.R"))) {
+        return(normalizePath(p, winslash = "/"))
+      }
+    }
+    parent <- dirname(current)
+    if (parent == current) break
+    current <- parent
+  }
+  return(NA_character_)
+}
+
+lab_dir <- find_lab_dir()
+stopifnot(!is.na(lab_dir))
+source(file.path(lab_dir, "week03_lab_helpers.R"))
+
+data_candidates <- c(
+  file.path(lab_dir, "data"),
+  file.path(lab_dir, "..", "data"),
+  file.path(lab_dir, "..", "data", "frozen")
+)
+data_dir <- data_candidates[
+  file.exists(file.path(data_candidates, "sp500_vix_monthly.csv"))
+][1]
+stopifnot(!is.na(data_dir))
+
+finance <- read_csv(file.path(data_dir, "sp500_vix_monthly.csv"),
+                    show_col_types = FALSE) |>
+  mutate(month = as.Date(month), target_month = as.Date(target_month))
+motor <- read_csv(file.path(data_dir, "motor_frequency.csv.gz"),
+                  show_col_types = FALSE) |>
+  mutate(Area = factor(Area))
+
+theme_set(theme_minimal(base_size = 12))
+options(dplyr.summarise.inform = FALSE)
+```
+
+`DATA_DICTIONARY.md` gives the columns, units, sources and split conventions. The supplied data are frozen through 31 December 2025. No live download is required.
+
+::: {.callout-note}
+The blank worksheet renders successfully. Add code and prose below each prompt, then render again to retain your results.
+:::
+
+## Task 1: Metrics and volatility by hand and in R
+
+### 1A. Errors, MAE and RMSE
+
+Use these three outcomes and predictions:
+
+| Observation | Actual | Predicted |
+|---:|---:|---:|
+| 1 | 10 | 12 |
+| 2 | 20 | 18 |
+| 3 | 30 | 24 |
+
+1. Create vectors called `actual` and `predicted`.
+2. Calculate signed errors $e_i=y_i-\widehat y_i$, absolute errors and squared errors.
+3. Put all five columns in one data frame.
+4. Calculate MAE and RMSE directly, then check them with `mae()` and `rmse()`.
+5. State the units of both metrics if the target is measured in volatility points.
+
+```{r}
+# Create the vectors and complete the error table.
+
+```
+
+**Checkpoint:** MAE is 3.33 and RMSE is 3.83, to two decimal places.
+
+### 1B. R-squared relative to a mean prediction
+
+Use the mean of `actual` as the baseline prediction for all three observations. Calculate
+
+$$
+R^2=1-\frac{\sum_i(y_i-\widehat y_i)^2}
+{\sum_i(y_i-\bar y)^2}.
+$$
+
+Check your direct calculation with `r2_against()`.
+
+```{r}
+# Construct the mean baseline and calculate R-squared.
+
+```
+
+**Checkpoint:** the model's squared error is 44, the mean baseline's squared error is 200, and $R^2=0.78$.
+
+<details class="concept">
+<summary>Why do MAE and RMSE have target units while R-squared does not?</summary>
+<div class="answer"><p>MAE averages absolute target errors and RMSE takes the square root after averaging squared target errors. R-squared divides one sum of squared errors by another with the same units, so the units cancel.</p></div>
+</details>
+
+### 1C. One volatility calculation
+
+For daily decimal returns `c(-0.01, 0, 0.01)`:
+
+1. calculate the sample standard deviation with `sd()`;
+2. annualise it with $\sqrt{252}$;
+3. express both results as percentages;
+4. explain why neither result predicts whether the next return will be positive.
+
+```{r}
+# Calculate daily and annualised sample volatility.
+
+```
+
+**Checkpoint:** daily sample volatility is 1% and the annualised value is approximately 15.9%.
+
+## Task 2: A fixed-split volatility forecast
+
+One row of `finance` has information from the end of `month` and a target in `target_month`.
+
+| Column | Meaning |
+|---|---|
+| `realised_vol` | Current month's realised volatility, annualised percentage points |
+| `vix_end` | Last VIX close in the current month |
+| `next_realised_vol` | Realised volatility in the next calendar month |
+| `sample_role` | Frozen chronological training or test role |
+
+### 2A. Audit the prediction dates
+
+1. Report the first and last `target_month` in each role and the number of rows.
+2. Verify that `month < target_month` in every row.
+3. Verify that training target months end in December 2009 and test target months begin in January 2010.
+4. Check the data for missing target or predictor values.
+
+```{r}
+# Audit dates, roles and missing values.
+
+```
+
+<details class="concept">
+<summary>Why would a random month split be misleading here?</summary>
+<div class="answer"><p>It could use later market regimes to estimate predictions assigned to earlier dates. The chronological split preserves the direction in which information arrives.</p></div>
+</details>
+
+### 2B. Estimate the forecasts
+
+Create `finance_train` and `finance_test` from `sample_role`.
+
+1. **Historical-mean baseline:** predict every test target with the mean training target.
+2. **Persistence baseline:** predict with the current row's `realised_vol`.
+3. **VIX model:** fit `next_realised_vol ~ vix_end` on training rows only and predict the test rows.
+4. Report the fitted intercept, slope and training $R^2$.
+
+```{r}
+# Split, fit and add three prediction columns to finance_test.
+
+```
+
+### 2C. Evaluate unseen months
+
+Use `prediction_metrics()` or calculate each metric directly. The historical mean must be the baseline for test $R^2$.
+
+```{r}
+# Build a three-row table with test MAE, RMSE and R2_test.
+
+```
+
+**Checkpoint for the fixed model:** the VIX model has MAE about 4.43, RMSE about 7.36 and test $R^2$ about 39.2%. State MAE and RMSE in annualised volatility points.
+
+### 2D. Plot the dated predictions
+
+Make a time-series plot of actual test volatility and all three predictions. Use `target_month` on the horizontal axis. Keep the plot legible and label the target units.
+
+```{r}
+# Reshape the test predictions and make the plot.
+
+```
+
+**Interpretation:** write four sentences covering:
+
+- which model has the smallest MAE;
+- which has the smallest RMSE;
+- what the VIX model's test $R^2$ means;
+- why this result does not yet imply a profitable trading strategy.
+
+## Task 3: Expanding-window forecasts
+
+A fixed 2009 model ignores information that becomes available during 2010-2025. `expanding_volatility_forecasts()` repeats this dated procedure:
+
+1. fit on target outcomes known by the forecast origin;
+2. predict the next month;
+3. record the error;
+4. add the newly observed month to the next training window.
+
+Read the function in `week03_lab_helpers.R` before running it. Explain how this line prevents leakage:
+
+```r
+training <- finance[finance$target_month < finance$target_month[j], ]
+```
+
+```{r}
+# Run the expanding helper and calculate its three-row metric table.
+
+```
+
+**Checkpoint:** the expanding VIX model has MAE about 4.44, RMSE about 7.40 and test $R^2$ about 38.3%.
+
+Identify the five VIX-model predictions with the largest absolute errors. Compare their effect on MAE and RMSE.
+
+```{r}
+# Create and display the five-row largest-error table.
+
+```
+
+::: {.callout-tip title="Interpretation check"}
+Persistence has lower MAE than the historical mean but higher RMSE and negative test $R^2$. Explain this using the extra influence of large squared errors.
+:::
+
+## Task 4: Motor claim frequency
+
+The file contains 677,991 public, anonymised policy observations. The build retains all supplied rows because selected fields are complete, exposure is positive and claim counts are non-negative. Counts and exposures were not capped.
+
+### 4A. Audit the policy split and target
+
+1. Count training and test policies.
+2. Confirm that `IDpol` is unique and that no identifier occurs in both roles.
+3. Summarise `ClaimNb`, `Exposure` and `claim_frequency`.
+4. Calculate the share of policies with zero claims.
+5. Explain why `ClaimNb / Exposure` can be large for a short policy with one claim.
+
+```{r}
+# Audit the policy data without dropping or changing rows.
+
+```
+
+### 4B. Portfolio baseline and weighted linear model
+
+Create `motor_train` and `motor_test`. Use training policies only to calculate
+
+$$
+\widehat\lambda_0=
+\frac{\sum_{i\in train}N_i}{\sum_{i\in train}E_i}.
+$$
+
+Then fit
+
+```r
+lm(claim_frequency ~ BonusMalus + DrivAge + I(DrivAge^2) + Area,
+   data = motor_train, weights = Exposure)
+```
+
+Do not add predictors after looking at test performance.
+
+```{r}
+# Calculate the training portfolio rate and fit the weighted model.
+
+```
+
+### 4C. Expected counts and policy-level metrics
+
+For each test policy, calculate
+
+$$
+\widehat N_{0i}=E_i\widehat\lambda_0,
+\qquad
+\widehat N_i=E_i\widehat F_i.
+$$
+
+Compare observed `ClaimNb` with both expected counts using MAE, RMSE and test $R^2$.
+
+```{r}
+# Predict test frequency, convert to expected counts and calculate metrics.
+
+```
+
+**Checkpoint:** the model's policy-level MAE is about 0.0731 claims, RMSE about 0.2046 claims and test $R^2$ about 1.7%.
+
+Count negative predicted frequencies. Do not replace them with zero before reporting the count.
+
+<details class="concept">
+<summary>Why can a small policy-level R-squared coexist with useful risk ranking?</summary>
+<div class="answer"><p>Most individual outcomes are zero and a claim remains highly uncertain. Aggregating many similarly predicted policies reduces individual noise and reveals differences in their average rates.</p></div>
+</details>
+
+### 4D. Risk groups on held-out policies
+
+Use `risk_group_summary()` to divide test policies into ten groups by predicted frequency. Plot observed group frequency and mean predicted frequency against group number.
+
+```{r}
+# Build the ten-group table and calibration plot.
+
+```
+
+**Checkpoint:** observed frequency is about 0.037 in the lowest group and 0.185 in the highest, a ratio close to 5.
+
+Write three sentences distinguishing prediction from causation, risk ranking from individual certainty, and empirical usefulness from permission to use a rating factor.
+
+### Optional extension: a non-negative mean
+
+Fit a Poisson count model with exposure as an offset:
+
+```r
+glm(ClaimNb ~ BonusMalus + DrivAge + I(DrivAge^2) + Area +
+      offset(log(Exposure)),
+    data = motor_train, family = poisson())
+```
+
+Check whether its expected counts are negative. Do not compare likelihoods or derive the model this week.
+
+## Task 5: Compare the two prediction designs
+
+Complete the table.
+
+| Question | Finance | Insurance |
+|---|---|---|
+| What is one row? |  |  |
+| What is the target? |  |  |
+| When are predictors known? |  |  |
+| What is the baseline? |  |  |
+| Why is the split appropriate? |  |  |
+| What are the MAE and RMSE units? |  |  |
+| What does test $R^2$ compare? |  |  |
+| What claim is supported? |  |  |
+| What stronger claim is unsupported? |  |  |
+
+Finish with six to eight evidence-based sentences. Include at least one numerical test result from each application and one limitation of each conclusion.
+
+## Exit check
+
+Without looking back, answer:
+
+1. What does MAE average?
+2. Why does RMSE react more strongly to one large error?
+3. What is the denominator of ordinary training $R^2$?
+4. Why can test $R^2$ be negative?
+5. Why do the two applications use different train/test splits?
