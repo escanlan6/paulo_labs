@@ -1,0 +1,108 @@
+---
+title: "Week 4 R reference"
+subtitle: "Simulation, least squares and dated validation"
+author: "MTH1097 Financial and Actuarial Data Analysis"
+format:
+  html:
+    theme: cosmo
+    css: lab.css
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    html-math-method: katex
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Purpose
+
+This page gives the R syntax and mathematical checks needed for the Week 4 worksheet. It is a reference for writing your own simulations and dated forecasting loop.
+
+## Monte Carlo averages
+
+`replicate(B, expr)` evaluates an expression $B$ times. Each evaluation below uses a fresh training sample and an independent new sample of size $n$. Its average squared error has the same expectation as the error for one new response and varies less in the simulation.
+
+```{r}
+set.seed(44)
+n <- 10
+sigma2 <- 4
+one_repetition <- function() {
+  y <- rnorm(n, mean = 2, sd = sqrt(sigma2))
+  fitted_mean <- mean(y)
+  y_new <- rnorm(n, mean = 2, sd = sqrt(sigma2))
+  c(train = mean((y - fitted_mean)^2),
+    new = mean((y_new - fitted_mean)^2))
+}
+scores <- replicate(1000, one_repetition())
+rowMeans(scores)
+```
+
+The theoretical pair for $n=10$ is 3.6 and 4.4. A random simulation need only be *close*, especially for new-response errors, which fluctuate more than averages of training residuals.
+
+## Fixed design and the meaning of $p$
+
+```{r}
+x <- seq(-1, 1, length.out = 60)
+X <- cbind(1, poly(x, degree = 3, raw = FALSE))
+dim(X)
+p <- ncol(X)
+p
+```
+
+The intercept is a fitted coefficient. For a fixed, full-rank design, ordinary least squares projects $Y$ onto the column space of $X$.
+
+```{r}
+H <- X %*% solve(crossprod(X), t(X))
+c(symmetric = max(abs(H - t(H))),
+  idempotent = max(abs(H %*% H - H)),
+  trace = sum(diag(H)))
+```
+
+Here $\operatorname{tr}(H)=p=4$. The lecture's $2p\sigma^2/n$ result concerns **new independent responses at these same $x$ values**. It needs independent mean-zero errors with covariance $\sigma^2I$ and a fixed full-rank $X$; it does not require normality or a correct linear mean model.
+
+## A fit and one prediction
+
+```{r}
+small_training <- data.frame(next_realised_vol = c(10, 12, 14, 18),
+                             vix_end = c(15, 18, 20, 27),
+                             realised_vol = c(9, 10, 13, 15))
+new_origin <- data.frame(vix_end = 22, realised_vol = 12)
+fit <- lm(next_realised_vol ~ vix_end + realised_vol,
+          data = small_training)
+as.numeric(predict(fit, newdata = new_origin))
+```
+
+The formula fixes the specification; a fresh `lm()` call updates coefficients at each forecast origin. For the baseline, use `mean(training$next_realised_vol)`.
+
+## Date checks in an expanding forecast
+
+The `month` column is the origin month; `target_month` is the next month. Before fitting a forecast for row `j`:
+
+```r
+origin <- finance$month[j]
+training <- finance[finance$target_month <= origin, ]
+stopifnot(max(training$target_month) <= origin,
+          all(training$target_month < finance$target_month[j]))
+```
+
+For a January 2000 target, the origin is December 1999. Its own outcome must not be in `training`. Do this check for *every* dated forecast, not only one example.
+
+## Score the same target months
+
+```r
+error <- actual - forecast
+mse <- mean(error^2)
+rmse <- sqrt(mse)
+mae <- mean(abs(error))
+r2_vs_mean <- 1 - sum(error^2) / sum((actual - historical_mean_forecast)^2)
+```
+
+MSE has squared volatility-point units; RMSE and MAE are in annualised volatility points. The baseline in the denominator must be dated and scored on the same months as the candidate. Test $R^2$ can be negative.
+
+## What a validation score estimates
+
+For independent units in $K$ folds, the score pools errors from fits that excluded the scored fold. Learned scaling, imputation or feature selection must also use the fitting fold only. In the monthly finance task, a chronological expanding-origin score answers the historical forecast question more directly than shuffled folds.
+
+The lowest of several noisy validation estimates is typically optimistic as a report of the selected model's risk. Use validation to choose a formula, and describe the fixed choice on later months. Because the later months have already appeared in Week 3 course results, this lab's assessment is a retrospective teaching comparison.

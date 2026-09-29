@@ -1,0 +1,217 @@
+---
+title: "Week 4 laboratory"
+subtitle: "Training optimism and dated model selection"
+author: "MTH1097 Financial and Actuarial Data Analysis"
+format:
+  html:
+    theme: cosmo
+    css: lab.css
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    embed-resources: true
+    html-math-method: katex
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Purpose
+
+**How much does fitting improve training error without improving a genuinely new prediction, and how should we choose a model for a dated forecast?**
+
+This is a two-hour formative lab. No submission is required. You will check two lecture derivations by simulation, then compare four next-month volatility forecasts using outcomes available at each month-end. You will write the selection rule before looking at the later assessment period.
+
+## Timing and checkpoints
+
+| Minutes | Task | Required result |
+|---|---|---|
+| 0–15 | Audit the data and information dates | Target, units, origin and baseline stated |
+| 15–40 | Sample-mean simulation | Training and new error, separately, beside theory |
+| 40–60 | Fixed-design least-squares simulation | Empirical and theoretical gap for four values of $p$ |
+| 60–95 | Expanding-origin validation | 120 dated forecasts per candidate; MSE table |
+| 95–110 | Freeze selection and assess later months | 192 forecasts; RMSE, MAE, baseline-relative $R^2$ |
+| 110–120 | Interpret and audit | Short conclusion with the historical limitation |
+
+Complete the core tasks before optional extensions. The rendered worksheet is a reading copy; edit the `.qmd` file to retain your own code and answers.
+
+## Working with AI
+
+Ask for one small piece of R code at a time. Explain its inputs, check one numerical identity, and check every forecast's information date. Your interpretation must state what the code has actually established. A small validation error is not a reason to change the target, dates or candidate list after seeing later outcomes.
+
+## Setup
+
+Extract the whole student package into a writable folder. This chunk works both in that package and in the course repository.
+
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2)
+
+lab_candidates <- c(".", "..", "week04/lab")
+lab_dir <- lab_candidates[file.exists(file.path(lab_candidates, "week04_lab.qmd"))][1]
+stopifnot(!is.na(lab_dir))
+data_candidates <- c(file.path(lab_dir, "data"),
+                     file.path(lab_dir, "../data/frozen"))
+data_dir <- data_candidates[
+  file.exists(file.path(data_candidates, "sp500_vix_monthly.csv"))
+][1]
+stopifnot(!is.na(data_dir))
+
+finance <- read_csv(file.path(data_dir, "sp500_vix_monthly.csv"),
+                    show_col_types = FALSE) |>
+  mutate(month = as.Date(month), target_month = as.Date(target_month)) |>
+  arrange(target_month)
+stopifnot(nrow(finance) == 431L, all(finance$month < finance$target_month))
+theme_set(theme_minimal(base_size = 12))
+```
+
+The panel was frozen from the Week 3 data. See `DATA_DICTIONARY.md` for source, columns and units. No internet access is needed.
+
+## Task 1 — Define the forecast before fitting (0–15 minutes)
+
+The row labelled `month` contains information available at the **end** of that month. `target_month` is the following calendar month. `next_realised_vol` is the outcome to predict.
+
+1. Write the forecast origin, target, target units and two available predictors (`vix_end` and `realised_vol`).
+2. Check the first and last target months and verify that every `month` precedes its `target_month`.
+3. Define the expanding historical-mean baseline: at origin $t$, average only targets whose `target_month` is no later than $t$.
+
+```{r}
+#| eval: false
+# Show the first two dated rows, the target-month range, and your date check.
+```
+
+**Checkpoint.** There are 431 rows. The target months run from February 1990 to December 2025. The January 2000 forecast must use target outcomes through December 1999 only.
+
+**Your definition:** …
+
+## Task 2 — Simulate the sample mean (15–40 minutes)
+
+Use $n\in\{5,10,20,50\}$, $\mu=2$, $\sigma^2=4$, and at least 1,000 independent repetitions per $n$. In each repetition:
+
+1. draw $n$ training responses;
+2. fit the sample mean $\bar Y$;
+3. calculate the mean squared **training** residual;
+4. draw $n$ independent new responses and average their squared prediction errors.
+
+Average both errors over repetitions. Put the empirical values beside
+
+$$E(R_{\rm train})=\sigma^2(1-1/n),\qquad
+E(R_{\rm new})=\sigma^2(1+1/n),\qquad
+E(R_{\rm new}-R_{\rm train})=2\sigma^2/n.$$
+
+```{r}
+#| eval: false
+set.seed(109704)
+sample_sizes <- c(5L, 10L, 20L, 50L)
+sigma2 <- 4
+# Write a loop or lapply() over sample_sizes.
+# Within each n, repeat the fit and the two error calculations.
+# Return a table with empirical_training, theoretical_training,
+# empirical_new, theoretical_new, empirical_gap and theoretical_gap.
+```
+
+**Check.** For $n=10$, theoretical training and new errors are 3.6 and 4.4, so the gap is 0.8. Averaging over $n$ new responses has the same expectation as scoring one new response, with less simulation noise. Explain why the new responses must be independent of training.
+
+**Your interpretation:** …
+
+## Task 3 — Simulate least-squares optimism (40–60 minutes)
+
+Hold 60 predictor values fixed: `x <- seq(-1, 1, length.out = 60)`. Let the true mean be $f(x)=2+0.8x$ and draw independent errors with variance 4. Fit polynomial degrees 0, 1, 3 and 7, with an intercept. These have $p=1,2,4,8$ fitted coefficients. In each repetition, score both the training responses and **new independent responses at the same 60 predictor values**.
+
+For each $p$, report the two empirical errors and their gap beside $2p\sigma^2/n$. Use at least 500 repetitions. A design matrix made with `cbind(1, poly(x, degree, raw = FALSE))` makes the value of $p$ explicit.
+
+```{r}
+#| eval: false
+set.seed(109705)
+x <- seq(-1, 1, length.out = 60)
+degrees <- c(0L, 1L, 3L, 7L)
+# For each degree, create the fixed design matrix X once.
+# In each repetition fit X to a new training y, then score training y
+# and an independent y_new at the same X. Include the intercept in p.
+```
+
+**Check.** For $p=4$, the theoretical gap is $2(4)(4)/60\approx0.533$. Report whether the empirical **training** and **new** errors separately agree with the lecture expressions. The gap alone is not enough to check both calculations.
+
+**Optional:** calculate $H=X(X^\top X)^{-1}X^\top$ and verify `sum(diag(H)) == p` to numerical precision. Normal errors are convenient for simulation, but not needed for the lecture expectation result.
+
+## Task 4 — Compare four dated forecasts (60–95 minutes)
+
+Fix these candidates before inspecting assessment outcomes:
+
+| Candidate | Fit at each origin |
+|---|---|
+| Historical mean | Mean of known past target outcomes |
+| Linear VIX | `next_realised_vol ~ vix_end` |
+| VIX + current volatility | `next_realised_vol ~ vix_end + realised_vol` |
+| VIX squared + current volatility | `next_realised_vol ~ vix_end + realised_vol + I(vix_end^2)` |
+
+Validation target months are January 2000–December 2009. At each row with origin `month = t`, form the training data using `target_month <= t`. Fit each candidate on that training set and predict the row's target. Store the origin, target, latest training target, candidate, actual and forecast. Write an explicit check that no scored target was in its own training set.
+
+```{r}
+#| eval: false
+candidate_names <- c("Historical mean", "Linear VIX",
+                     "VIX + current volatility",
+                     "VIX squared + current volatility")
+validation_rows <- which(finance$target_month >= as.Date("2000-01-01") &
+                         finance$target_month <= as.Date("2009-12-01"))
+# For each j in validation_rows:
+#   origin <- finance$month[j]
+#   train <- finance[finance$target_month <= origin, ]
+#   stopifnot(max(train$target_month) <= origin,
+#             all(train$target_month < finance$target_month[j]))
+#   fit and predict all four candidates; retain the dates.
+# Pool (actual - forecast)^2 by candidate to obtain MSE, then sqrt for RMSE.
+```
+
+**Check.** You should have 120 predictions per candidate. The historical-mean RMSE is about 12.72 points, linear VIX about 7.99, VIX plus current volatility about 7.62, and the squared-VIX model about 7.73. If your result differs substantially, inspect the training-date condition first.
+
+**Selection rule, written before Task 5:** Choose the lowest validation **MSE**. If MSE is exactly tied, choose fewer coefficients. Record the winning formula here: …
+
+## Task 5 — Assess the fixed choice (95–110 minutes)
+
+Keeping the formula chosen in Task 4, make expanding-origin forecasts for target months January 2010–December 2025. At every origin, refit its coefficients on all target outcomes known by that date. Also make the dated historical-mean forecast on the same 192 months. Do not change the candidate list or selection criterion after looking at these outcomes.
+
+```{r}
+#| eval: false
+# Reuse your dated forecasting loop for the assessment target months.
+# Calculate MSE, RMSE and MAE for the selected model and baseline.
+# R2_vs_mean <- 1 - sum((actual - selected_forecast)^2) /
+#                  sum((actual - historical_mean_forecast)^2)
+# Plot dated absolute errors or actual versus forecast.
+```
+
+**Check.** The selected candidate's assessment RMSE is about 7.68 points, MAE about 4.55 points, and $R^2$ against the dated historical mean about 0.334. The baseline RMSE is about 9.41 points. These numbers describe this historical period; they are not a guarantee for a later market.
+
+## Task 6 — Explain the evidence (110–120 minutes)
+
+Write four to six sentences that state the selected specification, its assessment RMSE and MAE **with units**, its improvement over the dated baseline, and one large miss visible in your plot. Explain why lower validation MSE did not guarantee that the selected candidate would beat every other VIX model in 2010–2025.
+
+Week 3 already showed aggregate 2010–2025 results for some models. Consequently, this is a **retrospective teaching comparison**, not a pristine, untouched external test. State that limitation in your conclusion.
+
+**Your conclusion:** …
+
+## Optional extension — Why in-sample rankings differ
+
+Fit all four nested least-squares specifications using **all 192 outcomes from 2010–2025**, and score each fitted model on those same outcomes. Compare those MSEs with the dated assessment MSEs from Task 5. Check that each added term can only reduce or leave unchanged the in-sample MSE when every model uses the same rows.
+
+Explain why the in-sample fits would use future outcomes at an earlier forecast origin. They are a hindsight demonstration of training fit, not a second model-selection criterion or a valid dated forecast.
+
+## Final audit
+
+| Check | Your answer |
+|---|---|
+| What was fixed before validation? | … |
+| What data fitted each dated forecast? | … |
+| Which loss selected the specification? | … |
+| What was reported only after selection? | … |
+| How many validation and assessment target months? | … |
+
+## Further reading
+
+- MTH1097 [module specification](https://modspec.dcu.ie/registry/module_contents_akari.php?function=2&subcode=MTH1097&yr=2027).
+- Wüthrich and Merz, *Statistical Foundations of Actuarial Learning and its Applications*, Chapter 4, on predictive loss and validation.
+- The lecture's derivations of $2\sigma^2/n$ and $2p\sigma^2/n$ are the mathematical checks for Tasks 2 and 3.

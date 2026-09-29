@@ -1,0 +1,36 @@
+built: '2026-09-27'
+frozen_through: '2025-12-31'
+source_panel: week03/data/frozen/sp500_vix_monthly.csv
+panel_sha256: 557fe18d0fc3f2b378b8ed9b6216fd70099034672a04cdfe155d44431342de04
+panel_rows: 431
+origin_months: '1990-01 through 2025-11'
+target_months: '1990-02 through 2025-12'
+target: Next calendar month's S&P 500 realised volatility, annualised percentage points
+realised_volatility: 100 * sqrt(252) * sample SD of daily S&P 500 log returns within the month
+predictors_at_origin:
+  - Last available VIX close in the origin month
+  - Realised S&P 500 volatility within the origin month
+validation_targets: '2000-01 through 2009-12, 120 months'
+assessment_targets: '2010-01 through 2025-12, 192 months'
+selection_loss: Mean squared error pooled across validation target months
+tie_rule: Fewer fitted coefficients, including intercept
+candidates:
+  - Historical mean of already-known target outcomes
+  - Linear VIX
+  - Linear VIX plus current realised volatility
+  - VIX squared plus current realised volatility
+selected_specification: Linear VIX plus current realised volatility
+selection_note: Coefficients are refitted at each origin; specification is fixed after validation.
+assessment_note: Retrospective classroom comparison; Week 3 already showed aggregate 2010-2025 results for some candidates.
+same_period_fit_note: All four models also fitted and scored on the same 192 outcomes in 2010-2025; these hindsight training scores are not forecasts or a model-selection step.
+simulations:
+  sample_mean_seed: 109704
+  sample_mean_repetitions: 2000
+  ols_seed: 109705
+  ols_repetitions: 1500
+  fitted_curves_seed: 109706
+  error_variance: 4
+sources:
+  sp500: https://finance.yahoo.com/quote/%5EGSPC/history/
+  vix: https://cdn-api.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv
+source_record: source_week03_metadata.yml

@@ -1,0 +1,29 @@
+built: '2026-09-19'
+frozen_through: '2025-12-31'
+finance:
+  target: Next calendar month's S&P 500 realised volatility, annualised percentage
+    points
+  realised_volatility: 100 * sqrt(252) * sample SD of daily S&P 500 log returns within
+    the month
+  predictor: Last available VIX close in the forecast-origin month
+  test_period: 2010-01 through 2025-12
+  sources:
+    sp500: https://finance.yahoo.com/quote/%5EGSPC/history/
+    vix: https://cdn-api.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv
+uso:
+  target: Monthly simple return in percent
+  test_period: 2020-01 through 2025-12
+  source: https://finance.yahoo.com/quote/USO/history/
+insurance:
+  rows: 677991
+  target: ClaimNb / Exposure; expected count equals Exposure times predicted frequency
+  cleaning: 'All supplied rows retained: complete selected fields, positive exposure,
+    non-negative counts; no capping'
+  split: Seed 109703; 70 percent train and 30 percent test at policy level
+  source: https://github.com/dutangc/CASdatasets/blob/master/data/freMTPL2freq.rda
+  citation: Dutang and Charpentier (2026), CASdatasets, DOI 10.57745/P0KHAG
+source_md5:
+  week03/data/source/VIX_History.csv: b298b94b91c16401f358163779996205
+  week03/data/source/freMTPL2freq.rda: b67f5cf5849b5744b2ce1bc945e4dcc6
+  week03/data/source/sp500_yahoo.csv: cbb8ea218574e385e27e574601f99119
+  week03/data/source/uso_yahoo.csv: 5dd68abb06dbc237f47ddefd5e60fc59

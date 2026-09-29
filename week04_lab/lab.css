@@ -1,0 +1,13 @@
+:root { --ink: #243b53; --navy: #102a43; --teal: #0b7285; }
+body { color: var(--ink); }
+h1, h2, h3 { color: var(--navy); }
+a { color: var(--teal); }
+details.concept { border-left: 4px solid #d69e2e; background: #fff6d8; border-radius: 5px; margin: 1rem 0; }
+details.concept summary { cursor: pointer; padding: .8rem 1rem; font-weight: 600; }
+details.concept .answer { padding: .7rem 1rem; background: #eaf6ef; }
+details.concept .answer p { margin-bottom: 0; }
+details.concept summary:focus-visible { outline: 2px solid var(--teal); }
+pre { border-radius: 5px; }
+table { font-size: .93em; }
+.task-output { border-left: 4px solid var(--teal); padding: .5rem 1rem; background: #e8f1f5; margin: 1rem 0; }
+@media print { details.concept .answer { display: block; } }
