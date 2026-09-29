@@ -802,17 +802,22 @@ Support every numerical claim with your own checked results. Distinguish empiric
 
 **Your conclusion:**
 1. How does the portfolio's daily volatility and one-day VaR compare with equities?
-	The portfolio is materially less volatile than equities: daily log-return SD is 0.00665 for the portfolio versus 0.0105 for equities, and its 99% VaR is EUR 1,505 versus EUR 2,365. This is the diversification effect from mixing equities, bonds and gold, although the portfolio still has a sizeable tail loss.
+	- The portfolio is materially less volatile than equities: daily log-return SD is 0.00665 for the portfolio versus 0.0105 for equities, and its 99% VaR is EUR 1,505 versus EUR 2,365. This is the diversification effect from mixing equities, bonds and gold, although the portfolio still has a sizeable tail loss.
+
 2. Does diversification also make the standardised tail shape more normal in this sample?
-	Not really: the portfolio is still clearly non-normal. Its standardised skewness is about -1.13 and excess kurtosis is about 12.0, compared with equities at about -0.99 and 10.0, so the portfolio remains left-skewed and heavy-tailed even after diversification. It is less volatile, but not substantially more normal in shape.
+	- Not really: the portfolio is still clearly non-normal. Its standardised skewness is about -1.13 and excess kurtosis is about 12.0, compared with equities at about -0.99 and 10.0, so the portfolio remains left-skewed and heavy-tailed even after diversification. It is less volatile, but not substantially more normal in shape.
+
 3. Which graphical departures agree with the tests?
-	The daily QQ plots bend away from the y = x line in both tails, especially the left tail, which matches the strong negative skew and excess kurtosis. The histogram overlays also show heavier tails and a more peaked centre than the fitted normal density, and these visual departures line up with the daily SW/JB/AD rejections.
+	- The daily QQ plots bend away from the y = x line in both tails, especially the left tail, which matches the strong negative skew and excess kurtosis. The histogram overlays also show heavier tails and a more peaked centre than the fitted normal density, and these visual departures line up with the daily SW/JB/AD rejections.
+
 4. What can and cannot be inferred from the monthly results?
-	Monthly p-values are larger, but that does not prove monthly returns are normal; it mainly reflects the much smaller sample size and lower power. For example, the monthly JB p-values range from 0.038 for equities to 0.744 for gold, and the AD p-values range from 0.079 to 0.183, so the evidence is weaker and not decisive. The monthly results do not validate the model or establish independence; they only indicate that the monthly sample has less evidence against the fitted normal benchmark.
+	- Monthly p-values are larger, but that does not prove monthly returns are normal; it mainly reflects the much smaller sample size and lower power. For example, the monthly JB p-values range from 0.038 for equities to 0.744 for gold, and the AD p-values range from 0.079 to 0.183, so the evidence is weaker and not decisive. The monthly results do not validate the model or establish independence; they only indicate that the monthly sample has less evidence against the fitted normal benchmark.
 5. What does the KS refitting experiment demonstrate?
-	It shows that the ordinary KS p-value and the fixed-parameter simulation answer the wrong question here. In the monthly-equities experiment, the ordinary KS p-value is about 0.737 and the fixed-parameter p-value is about 0.745, while the correctly refitted p-value is about 0.323. The second fit matters because each simulated sample must be compared with its own fitted normal distribution, not with the original fitted CDF treated as fixed.
+
+	- It shows that the ordinary KS p-value and the fixed-parameter simulation answer the wrong question here. In the monthly-equities experiment, the ordinary KS p-value is about 0.737 and the fixed-parameter p-value is about 0.745, while the correctly refitted p-value is about 0.323. The second fit matters because each simulated sample must be compared with its own fitted normal distribution, not with the original fitted CDF treated as fixed.
 6. What changes in the jump scenario, and what remains only a model assumption?
-	When jump frequency rises from lambda = 2 to lambda = 4, the jump model produces much fatter tails: the 0.1% log-quantile moves from about -0.109 to about -0.132 and the 99.9% quantile from about 0.033 to about 0.053. The expected gross growth is kept at exp(mu h) by adjusting the drift a, so the jump intensity changes the tail shape without changing the chosen mean wealth-growth target. The jump parameters themselves remain illustrative assumptions, not fitted values from the observed asset data.
+
+	- When jump frequency rises from lambda = 2 to lambda = 4, the jump model produces much fatter tails: the 0.1% log-quantile moves from about -0.109 to about -0.132 and the 99.9% quantile from about 0.033 to about 0.053. The expected gross growth is kept at exp(mu h) by adjusting the drift a, so the jump intensity changes the tail shape without changing the chosen mean wealth-growth target. The jump parameters themselves remain illustrative assumptions, not fitted values from the observed asset data.
 
 ## Optional extensions
 
