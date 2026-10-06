@@ -538,6 +538,62 @@ The file contains 677,991 public, anonymised policy observations. The build reta
 ```{r}
 # Audit the policy data without dropping or changing rows.
 
+# 1. Count training and test policies.
+motor |>
+  group_by(sample_role) |>
+  summarise(policy_count = n(), .groups = "drop")
+
+# 2. Confirm that IDpol is unique and that no identifier occurs in both roles.
+motor |>
+  group_by(IDpol) |>
+  summarise(
+    n_rows = n(),
+    n_roles = n_distinct(sample_role),
+    .groups = "drop"
+  ) |>
+  summarise(
+    duplicate_ids = sum(n_rows > 1L),
+    ids_in_both_roles = sum(n_roles > 1L),
+    total_unique_ids = n()
+  )
+
+# 3. Summarise ClaimNb, Exposure and claim_frequency.
+motor |>
+  mutate(claim_frequency = ClaimNb / Exposure) |>
+  select(ClaimNb, Exposure, claim_frequency) |>
+  summarise(
+    across(
+      everything(),
+      list(
+        min = min,
+        mean = mean,
+        median = median,
+        max = max,
+        sd = sd
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  ) |>
+  t()
+
+# 4. Calculate the share of policies with zero claims.
+motor |>
+  summarise(
+    total_policies = n(),
+    zero_claim_policies = sum(ClaimNb == 0L),
+    zero_claim_share = mean(ClaimNb == 0L)
+  )
+
+# 5. Explain why ClaimNb / Exposure can be large for a short policy with one claim.
+# A policy with Exposure = 0.1 (10% of a year) and ClaimNb = 1 has 
+# claim_frequency = 1 / 0.1 = 10, which annualises the single claim.
+# The frequency metric expresses claims per year of exposure, not per policy.
+motor |>
+  filter(ClaimNb == 1L) |>
+  mutate(claim_frequency = ClaimNb / Exposure) |>
+  slice_min(Exposure, n = 5) |>
+  select(IDpol, ClaimNb, Exposure, claim_frequency)
+
 ```
 
 ### 4B. Portfolio baseline and weighted linear model
@@ -561,6 +617,28 @@ Do not add predictors after looking at test performance.
 ```{r}
 # Calculate the training portfolio rate and fit the weighted model.
 
+# Create motor_train and motor_test.
+motor_train <- motor |>
+  filter(sample_role == "train") |>
+  mutate(claim_frequency = ClaimNb / Exposure)
+
+motor_test <- motor |>
+  filter(sample_role == "test") |>
+  mutate(claim_frequency = ClaimNb / Exposure)
+
+# Calculate the training portfolio rate (lambda_0).
+portfolio_rate <- with(
+  motor_train,
+  sum(ClaimNb) / sum(Exposure)
+)
+
+# Fit the weighted least-squares model on training data.
+frequency_fit <- lm(
+  claim_frequency ~ BonusMalus + DrivAge + I(DrivAge^2) + Area,
+  data = motor_train,
+  weights = Exposure
+)
+
 ```
 
 ### 4C. Expected counts and policy-level metrics
@@ -577,6 +655,23 @@ Compare observed `ClaimNb` with both expected counts using MAE, RMSE and test $R
 
 ```{r}
 # Predict test frequency, convert to expected counts and calculate metrics.
+
+# Predict test frequency.
+motor_test$predicted_frequency <- predict(frequency_fit, newdata = motor_test)
+
+# Calculate expected counts using baseline portfolio rate and model predictions.
+motor_test$baseline_count <- motor_test$Exposure * portfolio_rate
+motor_test$predicted_count <- motor_test$Exposure * motor_test$predicted_frequency
+
+# Compare observed ClaimNb with both expected counts using MAE, RMSE and test R².
+prediction_metrics(
+  actual = motor_test$ClaimNb,
+  predictions = list(
+    baseline = motor_test$baseline_count,
+    model = motor_test$predicted_count
+  ),
+  baseline_name = "baseline"
+)
 
 ```
 
@@ -595,6 +690,28 @@ Use `risk_group_summary()` to divide test policies into ten groups by predicted 
 
 ```{r}
 # Build the ten-group table and calibration plot.
+
+# Divide test policies into ten groups by predicted frequency.
+groups <- risk_group_summary(
+  motor_test,
+  predicted_frequency = motor_test$predicted_frequency,
+  groups = 10
+)
+
+# Print the ten-group table.
+as_tibble(groups)
+
+# Plot observed group frequency and mean predicted frequency against group number.
+groups |>
+  select(risk_group, mean_predicted_frequency, observed_frequency) |>
+  pivot_longer(-risk_group, names_to = "series", values_to = "frequency") |>
+  ggplot(aes(risk_group, frequency, colour = series, shape = series)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = 1:10) +
+  labs(x = "Predicted-risk group", y = "Claims per exposure-year",
+       colour = NULL, shape = NULL) +
+  theme_minimal()
 
 ```
 
@@ -620,15 +737,15 @@ Complete the table.
 
 | Question | Finance | Insurance |
 |---|---|---|
-| What is one row? |  |  |
-| What is the target? |  |  |
-| When are predictors known? |  |  |
-| What is the baseline? |  |  |
-| Why is the split appropriate? |  |  |
-| What are the MAE and RMSE units? |  |  |
-| What does test $R^2$ compare? |  |  |
-| What claim is supported? |  |  |
-| What stronger claim is unsupported? |  |  |
+| What is one row? | One monthly observation of realized and forecast volatility | One insurance policy |
+| What is the target? | Next month's realized volatility | Number of claims in the policy period |
+| When are predictors known? | At the end of the origin month, before the target month occurs | When the policy is underwritten, before claims are observed |
+| What is the baseline? | Historical mean of training volatility | Portfolio claim rate (total training claims / total training exposure) |
+| Why is the split appropriate? | Chronological: training months precede test months; expanding window ensures no future data enters training | Random: training and test are independent samples; both represent the same population of policies |
+| What are the MAE and RMSE units? | Percentage volatility (annualized, e.g., 15%) | Claim counts (number of claims) |
+| What does test $R^2$ compare? | Relative error reduction of the model versus historical-mean baseline on test forecasts | Relative error reduction of the model versus portfolio-rate baseline on test claim counts |
+| What claim is supported? | The VIX model reduces test forecast error relative to the historical-mean baseline | The frequency model reduces test claim-count error relative to the portfolio-rate baseline |
+| What stronger claim is unsupported? | The VIX model will reduce forecast error on future months beyond the test period | The frequency model will reduce claim-count error on future policies beyond the test set |
 
 Finish with six to eight evidence-based sentences. Include at least one numerical test result from each application and one limitation of each conclusion.
 
