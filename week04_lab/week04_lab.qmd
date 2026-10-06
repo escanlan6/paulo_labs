@@ -82,6 +82,22 @@ The row labelled `month` contains information available at the **end** of that m
 ```{r}
 #| eval: false
 # Show the first two dated rows, the target-month range, and your date check.
+finance |>
+  select(month, target_month, vix_end, realised_vol, next_realised_vol) |>
+  head(2)
+
+range(finance$target_month)
+
+all(finance$month < finance$target_month)
+
+t <- as.Date("1999-12-31")
+training_at_t <- finance |>
+  filter(target_month <= t)
+
+max(training_at_t$target_month)
+
+# Expanding historical-mean baseline at origin t:
+mean(training_at_t$next_realised_vol)
 ```
 
 **Checkpoint.** There are 431 rows. The target months run from February 1990 to December 2025. The January 2000 forecast must use target outcomes through December 1999 only.
@@ -108,10 +124,37 @@ E(R_{\rm new}-R_{\rm train})=2\sigma^2/n.$$
 set.seed(109704)
 sample_sizes <- c(5L, 10L, 20L, 50L)
 sigma2 <- 4
-# Write a loop or lapply() over sample_sizes.
-# Within each n, repeat the fit and the two error calculations.
-# Return a table with empirical_training, theoretical_training,
-# empirical_new, theoretical_new, empirical_gap and theoretical_gap.
+B <- 1000L
+
+sim_results <- lapply(sample_sizes, function(n) {
+  one_repetition <- function() {
+    y <- rnorm(n, mean = 2, sd = sqrt(sigma2))
+    fitted_mean <- mean(y)
+    y_new <- rnorm(n, mean = 2, sd = sqrt(sigma2))
+    c(
+      train = mean((y - fitted_mean)^2),
+      new = mean((y_new - fitted_mean)^2)
+    )
+  }
+
+  scores <- replicate(B, one_repetition())
+  empirical_training <- mean(scores["train", ])
+  empirical_new <- mean(scores["new", ])
+  theoretical_training <- sigma2 * (1 - 1 / n)
+  theoretical_new <- sigma2 * (1 + 1 / n)
+
+  data.frame(
+    n = n,
+    empirical_training = empirical_training,
+    theoretical_training = theoretical_training,
+    empirical_new = empirical_new,
+    theoretical_new = theoretical_new,
+    empirical_gap = empirical_new - empirical_training,
+    theoretical_gap = 2 * sigma2 / n
+  )
+})
+
+do.call(rbind, sim_results)
 ```
 
 **Check.** For $n=10$, theoretical training and new errors are 3.6 and 4.4, so the gap is 0.8. Averaging over $n$ new responses has the same expectation as scoring one new response, with less simulation noise. Explain why the new responses must be independent of training.
@@ -129,9 +172,45 @@ For each $p$, report the two empirical errors and their gap beside $2p\sigma^2/n
 set.seed(109705)
 x <- seq(-1, 1, length.out = 60)
 degrees <- c(0L, 1L, 3L, 7L)
-# For each degree, create the fixed design matrix X once.
-# In each repetition fit X to a new training y, then score training y
-# and an independent y_new at the same X. Include the intercept in p.
+sigma2 <- 4
+B <- 1000L
+n <- length(x)
+f_x <- 2 + 0.8 * x
+
+ls_results <- lapply(degrees, function(degree) {
+  X <- if (degree == 0L) {
+    matrix(1, nrow = n, ncol = 1)
+  } else {
+    cbind(1, poly(x, degree = degree, raw = FALSE))
+  }
+  p <- ncol(X)
+
+  one_repetition <- function() {
+    y <- f_x + rnorm(n, mean = 0, sd = sqrt(sigma2))
+    y_new <- f_x + rnorm(n, mean = 0, sd = sqrt(sigma2))
+    fit <- lm.fit(x = X, y = y)
+    y_hat <- as.numeric(X %*% fit$coefficients)
+    c(
+      train = mean((y - y_hat)^2),
+      new = mean((y_new - y_hat)^2)
+    )
+  }
+
+  scores <- replicate(B, one_repetition())
+  empirical_training <- mean(scores["train", ])
+  empirical_new <- mean(scores["new", ])
+
+  data.frame(
+    degree = degree,
+    p = p,
+    empirical_training = empirical_training,
+    empirical_new = empirical_new,
+    empirical_gap = empirical_new - empirical_training,
+    theoretical_gap = 2 * p * sigma2 / n
+  )
+})
+
+do.call(rbind, ls_results)
 ```
 
 **Check.** For $p=4$, the theoretical gap is $2(4)(4)/60\approx0.533$. Report whether the empirical **training** and **new** errors separately agree with the lecture expressions. The gap alone is not enough to check both calculations.
@@ -158,18 +237,80 @@ candidate_names <- c("Historical mean", "Linear VIX",
                      "VIX squared + current volatility")
 validation_rows <- which(finance$target_month >= as.Date("2000-01-01") &
                          finance$target_month <= as.Date("2009-12-01"))
-# For each j in validation_rows:
-#   origin <- finance$month[j]
-#   train <- finance[finance$target_month <= origin, ]
-#   stopifnot(max(train$target_month) <= origin,
-#             all(train$target_month < finance$target_month[j]))
-#   fit and predict all four candidates; retain the dates.
-# Pool (actual - forecast)^2 by candidate to obtain MSE, then sqrt for RMSE.
+
+candidate_n_coef <- c(
+  "Historical mean" = 1L,
+  "Linear VIX" = 2L,
+  "VIX + current volatility" = 3L,
+  "VIX squared + current volatility" = 4L
+)
+
+predict_one_origin <- function(train, new_row, candidate) {
+  if (candidate == "Historical mean") {
+    return(mean(train$next_realised_vol))
+  }
+  if (candidate == "Linear VIX") {
+    fit <- lm(next_realised_vol ~ vix_end, data = train)
+  } else if (candidate == "VIX + current volatility") {
+    fit <- lm(next_realised_vol ~ vix_end + realised_vol, data = train)
+  } else {
+    fit <- lm(next_realised_vol ~ vix_end + realised_vol + I(vix_end^2),
+              data = train)
+  }
+  as.numeric(predict(fit, newdata = new_row))
+}
+
+validation_forecasts <- lapply(validation_rows, function(j) {
+  origin <- finance$month[j]
+  train <- finance[finance$target_month <= origin, ]
+
+  stopifnot(
+    nrow(train) > 0,
+    max(train$target_month) <= origin,
+    all(train$target_month < finance$target_month[j])
+  )
+
+  new_row <- finance[j, , drop = FALSE]
+
+  data.frame(
+    origin = rep(origin, length(candidate_names)),
+    target_month = rep(finance$target_month[j], length(candidate_names)),
+    latest_training_target = rep(max(train$target_month), length(candidate_names)),
+    candidate = candidate_names,
+    actual = rep(finance$next_realised_vol[j], length(candidate_names)),
+    forecast = vapply(candidate_names,
+                      function(cn) predict_one_origin(train, new_row, cn),
+                      numeric(1))
+  )
+})
+
+validation_forecasts <- do.call(rbind, validation_forecasts)
+
+validation_scores <- validation_forecasts |>
+  mutate(sq_error = (actual - forecast)^2) |>
+  summarise(
+    n_predictions = dplyr::n(),
+    mse = mean(sq_error),
+    rmse = sqrt(mean(sq_error)),
+    .by = candidate
+  ) |>
+  arrange(mse, candidate_n_coef[candidate])
+
+stopifnot(all(validation_scores$n_predictions == 120L))
+
+selection_table <- validation_scores |>
+  mutate(n_coef = unname(candidate_n_coef[candidate])) |>
+  arrange(mse, n_coef)
+
+selected_candidate <- selection_table$candidate[1]
+
+validation_scores
+selection_table[1, c("candidate", "n_coef", "mse", "rmse")]
 ```
 
 **Check.** You should have 120 predictions per candidate. The historical-mean RMSE is about 12.72 points, linear VIX about 7.99, VIX plus current volatility about 7.62, and the squared-VIX model about 7.73. If your result differs substantially, inspect the training-date condition first.
 
-**Selection rule, written before Task 5:** Choose the lowest validation **MSE**. If MSE is exactly tied, choose fewer coefficients. Record the winning formula here: …
+**Selection rule, written before Task 5:** Choose the lowest validation **MSE**. If MSE is exactly tied, choose fewer coefficients. Record the winning formula here: `next_realised_vol ~ vix_end + realised_vol`.
 
 ## Task 5 — Assess the fixed choice (95–110 minutes)
 
@@ -177,11 +318,57 @@ Keeping the formula chosen in Task 4, make expanding-origin forecasts for target
 
 ```{r}
 #| eval: false
-# Reuse your dated forecasting loop for the assessment target months.
-# Calculate MSE, RMSE and MAE for the selected model and baseline.
-# R2_vs_mean <- 1 - sum((actual - selected_forecast)^2) /
-#                  sum((actual - historical_mean_forecast)^2)
-# Plot dated absolute errors or actual versus forecast.
+assessment_rows <- which(finance$target_month >= as.Date("2010-01-01") &
+                         finance$target_month <= as.Date("2025-12-01"))
+
+assessment_forecasts <- lapply(assessment_rows, function(j) {
+  origin <- finance$month[j]
+  train <- finance[finance$target_month <= origin, ]
+
+  stopifnot(
+    nrow(train) > 0,
+    max(train$target_month) <= origin,
+    all(train$target_month < finance$target_month[j])
+  )
+
+  new_row <- finance[j, , drop = FALSE]
+  data.frame(
+    origin = origin,
+    target_month = finance$target_month[j],
+    actual = finance$next_realised_vol[j],
+    selected_forecast = predict_one_origin(train, new_row, selected_candidate),
+    historical_mean_forecast = predict_one_origin(train, new_row, "Historical mean")
+  )
+})
+
+assessment_forecasts <- do.call(rbind, assessment_forecasts)
+
+selected_error <- assessment_forecasts$actual - assessment_forecasts$selected_forecast
+baseline_error <- assessment_forecasts$actual - assessment_forecasts$historical_mean_forecast
+
+assessment_metrics <- data.frame(
+  candidate = c(selected_candidate, "Historical mean"),
+  mse = c(mean(selected_error^2), mean(baseline_error^2)),
+  rmse = c(sqrt(mean(selected_error^2)), sqrt(mean(baseline_error^2))),
+  mae = c(mean(abs(selected_error)), mean(abs(baseline_error)))
+)
+
+r2_vs_mean <- 1 - sum(selected_error^2) / sum(baseline_error^2)
+
+assessment_metrics
+r2_vs_mean
+
+plot_data <- rbind(
+  data.frame(target_month = assessment_forecasts$target_month,
+             model = selected_candidate,
+             abs_error = abs(selected_error)),
+  data.frame(target_month = assessment_forecasts$target_month,
+             model = "Historical mean",
+             abs_error = abs(baseline_error))
+)
+
+ggplot(plot_data, aes(x = target_month, y = abs_error, color = model)) +
+  geom_line()
 ```
 
 **Check.** The selected candidate's assessment RMSE is about 7.68 points, MAE about 4.55 points, and $R^2$ against the dated historical mean about 0.334. The baseline RMSE is about 9.41 points. These numbers describe this historical period; they are not a guarantee for a later market.
@@ -192,7 +379,7 @@ Write four to six sentences that state the selected specification, its assessmen
 
 Week 3 already showed aggregate 2010–2025 results for some models. Consequently, this is a **retrospective teaching comparison**, not a pristine, untouched external test. State that limitation in your conclusion.
 
-**Your conclusion:** …
+**Your conclusion:** The selected specification was `next_realised_vol ~ vix_end + realised_vol`, chosen by the lowest validation MSE on 2000–2009. On the 2010–2025 assessment months, its RMSE was about 7.68 annualised volatility points and its MAE was about 4.55 points, compared with a dated historical-mean RMSE of about 9.41 points and $R^2$ versus that dated baseline of about 0.334. A large miss is visible for target month 2020-03-01, where realised volatility was far above the model forecast by about 63.88 points. Lower validation MSE did not guarantee dominance over every other VIX model in 2010–2025 because validation estimates are noisy and period-specific, and this exercise is a retrospective teaching comparison since some 2010–2025 outcomes were already summarised in Week 3 rather than a pristine untouched external test.
 
 ## Optional extension — Why in-sample rankings differ
 
@@ -204,11 +391,11 @@ Explain why the in-sample fits would use future outcomes at an earlier forecast 
 
 | Check | Your answer |
 |---|---|
-| What was fixed before validation? | … |
-| What data fitted each dated forecast? | … |
-| Which loss selected the specification? | … |
-| What was reported only after selection? | … |
-| How many validation and assessment target months? | … |
+| What was fixed before validation? | The four candidate formulas and the selection rule: choose lowest validation MSE, with ties broken by fewer coefficients. |
+| What data fitted each dated forecast? | At origin month $t$, each fit used only rows with `target_month <= t`, so only outcomes known by that date entered training. |
+| Which loss selected the specification? | Validation mean squared error (MSE). |
+| What was reported only after selection? | Assessment-period performance for 2010–2025 (MSE/RMSE/MAE and baseline-relative $R^2$). |
+| How many validation and assessment target months? | 120 validation months (2000-01 to 2009-12) and 192 assessment months (2010-01 to 2025-12). |
 
 ## Further reading
 
